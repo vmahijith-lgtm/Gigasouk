@@ -3,46 +3,41 @@
 # Keep secrets, build output, and machine-local caches out of Git.
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── Secrets (never commit) ─────────────────────────────────────────────────
-# Do not use a blanket `.env.*` — that would ignore `.env.example` / `.env.local.example`.
+# ------------------ Secrets (never commit) ----------------------------------
+# Keep example files (e.g. .env.example) in the repo, but ignore real .env files.
 .env
+.env.*.local
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
 backend/.env
 frontend/.env.local
 *.pem
 *.p12
 *.key
 
-# ── Python ────────────────────────────────────────────────────────────────
+# ------------------ Python --------------------------------------------------
+# Virtualenvs
 .venv/
 venv/
 env/
+backend/.venv/
+
+# Byte-compiled / caches
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
+
+# Packaging / build
 build/
-develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 MANIFEST
-pip-log.txt
-pip-delete-this-directory.txt
+
+# Test / coverage
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -52,10 +47,12 @@ htmlcov/
 coverage.xml
 *.cover
 .hypothesis/
+
+# Tools
 .tox/
 .nox/
 
-# ── Node / Next.js ─────────────────────────────────────────────────────────
+# ------------------ Node / Next.js / frontend -------------------------------
 node_modules/
 **/node_modules/
 frontend/.next/
@@ -71,21 +68,36 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# ── OS & editors ───────────────────────────────────────────────────────────
+# Next build artifacts
+/.next
+/.next/**
+
+# ------------------ OS / editors / IDEs ------------------------------------
+# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Editors
 *~
 *.swp
 *.swo
 .idea/
 *.sublime-project
 *.sublime-workspace
+.vscode/
+.history/
 
-# ── Logs & temp ───────────────────────────────────────────────────────────
+# JetBrains
+/.idea/
+*.iml
+
+# ------------------ Logs / temp / runtime ----------------------------------
 *.log
 logs/
 tmp/
@@ -93,12 +105,28 @@ temp/
 *.tmp
 *.temp
 *.cache
+celerybeat-schedule
+*.pid
 
-# ── Optional local tooling ────────────────────────────────────────────────
+# ------------------ Database / local state ---------------------------------
+*.sqlite3
+*.db
+*.db-journal
+
+# ------------------ Docker -------------------------------------------------
+docker-compose.override.yml
+.env.docker
+
+# ------------------ Misc / tools -------------------------------------------
+# Local environment markers
+.python-version
+
+# Editorconfig/project settings that may be local
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json.example
 
-
-# --Context -----
+# ------------------ Context / generated -----------------------------------
 context/
+
+# End of .gitignore

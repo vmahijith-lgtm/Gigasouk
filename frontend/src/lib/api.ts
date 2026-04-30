@@ -1,0 +1,63 @@
+// api.ts — All Backend API Calls
+// Every call to the FastAPI backend is a named function here.
+// TO CHANGE THE API URL: update NEXT_PUBLIC_API_URL in .env.local
+import axios from "axios";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const api = axios.create({ baseURL: API_BASE, timeout: 15000 });
+
+// ── Orders ────────────────────────────────────────────────────────
+export const placeOrder        = (data: object)         => api.post("/api/v1/orders", data);
+export const getOrder          = (orderId: string)      => api.get(`/api/v1/orders/${orderId}`);
+export const updateOrderStatus = (orderId: string, status: string) =>
+  api.patch(`/api/v1/orders/${orderId}/status`, { status });
+export const adminListOrders   = (status?: string)      => api.get("/api/v1/admin/orders", { params: { status } });
+
+// ── Bids / Negotiation ────────────────────────────────────────────
+export const submitBid      = (data: object)            => api.post("/api/v1/bids", data);
+export const acceptBid      = (data: object)            => api.post("/api/v1/bids/accept", data);
+export const getMessages    = (roomId: string)          => api.get(`/api/v1/messages/${roomId}`);
+export const sendMessage    = (data: object)            => api.post("/api/v1/messages", data);
+export const markRead       = (data: object)            => api.post("/api/v1/messages/read", data);
+export const getUnreadCount = (userId: string)          => api.get(`/api/v1/messages/unread/${userId}`);
+
+// ── Commitment Pipeline ───────────────────────────────────────────
+export const seekCommitments      = (data: object)      => api.post("/api/v1/designs/seek", data);
+export const createCommitment     = (data: object)      => api.post("/api/v1/commitments", data);
+export const reviewVariant        = (data: object)      => api.post("/api/v1/commitments/variants/review", data);
+export const getAvailableDesigns  = (mfrId: string)     => api.get("/api/v1/commitments/available", { params: { manufacturer_id: mfrId } });
+export const getMyCommitments     = (mfrId: string)     => api.get("/api/v1/commitments/mine", { params: { manufacturer_id: mfrId } });
+export const publishDesign        = (designId: string, designerId: string) =>
+  api.post(`/api/v1/designs/${designId}/publish`, { designer_id: designerId });
+export const pauseDesign          = (designId: string, data: object) =>
+  api.post(`/api/v1/designs/${designId}/pause`, data);
+export const adminPendingVariants = ()                  => api.get("/api/v1/admin/variants/pending");
+
+// ── Designs (Designer CRUD) ───────────────────────────────────────
+export const getDesignerDesigns = (designerId: string)  =>
+  api.get("/api/v1/designs", { params: { designer_id: designerId } });
+export const createDesign       = (data: object)        => api.post("/api/v1/designs", data);
+export const updateDesign       = (designId: string, data: object) =>
+  api.patch(`/api/v1/designs/${designId}`, data);
+export const deleteDesign       = (designId: string, designerId: string) =>
+  api.delete(`/api/v1/designs/${designId}`, { params: { designer_id: designerId } });
+
+// ── Payments ──────────────────────────────────────────────────────
+export const createPayment  = (data: object)            => api.post("/api/v1/payments/create", data);
+export const verifyPayment  = (data: object)            => api.post("/api/v1/payments/verify", data);
+export const releaseEscrow  = (data: object)            => api.post("/api/v1/payments/release", data);
+export const refundPayment  = (data: object)            => api.post("/api/v1/payments/refund", data);
+
+// ── QC ────────────────────────────────────────────────────────────
+export const submitQC       = (data: object)            => api.post("/api/v1/qc/submit", data);
+export const manualQCReview = (data: object)            => api.post("/api/v1/qc/manual-review", data);
+export const getQCHistory   = (orderId: string)         => api.get(`/api/v1/qc/${orderId}`);
+
+// ── Tracking ──────────────────────────────────────────────────────
+export const trackShipment  = (awb: string)             => api.get(`/api/v1/track/${awb}`);
+
+// ── Emergency Broadcast ───────────────────────────────────────────
+export const triggerEmergencyScan = ()                  => api.post("/api/v1/admin/emergency-scan");
+export const getBroadcastHistory  = (designId?: string) =>
+  api.get("/api/v1/admin/broadcasts", { params: { design_id: designId } });
