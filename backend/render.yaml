@@ -1,0 +1,115 @@
+# ════════════════════════════════════════════════════════════════
+# render.yaml — GigaSouk Backend · Render Blueprint
+#
+# Drop this file at the ROOT of your repository (or point Render
+# to the backend/ subdirectory via "Root Directory" in the
+# Render dashboard). Render will auto-detect and use it.
+#
+# HOW TO DEPLOY:
+#   1. Push this repo to GitHub.
+#   2. Go to Render → New → Blueprint.
+#   3. Connect your repo. Render reads this file automatically.
+#   4. Add your secret env vars in Render → Service → Environment.
+#
+# Docs: https://render.com/docs/blueprint-spec
+# ════════════════════════════════════════════════════════════════
+
+services:
+  - type: web
+    name: gigasouk-api
+    runtime: python
+    region: singapore          # Closest to India — change to oregon if needed
+
+    # ── Source ─────────────────────────────────────────────────
+    # If your repo root IS the backend folder, remove rootDir.
+    # If backend/ is a subdirectory (monorepo layout), keep it.
+    rootDir: backend
+
+    # ── Python Version ─────────────────────────────────────────
+    # Render reads runtime.txt in rootDir automatically.
+    # No extra config needed — runtime.txt handles this.
+
+    # ── Build ──────────────────────────────────────────────────
+    buildCommand: |
+      apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0 && \
+      pip install --upgrade pip && \
+      pip install -r requirements.txt
+
+    # ── Start ──────────────────────────────────────────────────
+    # --workers 1 is intentional — see Procfile for full reason.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info --timeout-keep-alive 75
+
+    # ── Health Check ───────────────────────────────────────────
+    # Render pings this after each deploy. Non-200 = rollback.
+    healthCheckPath: /health
+
+    # ── Plan ───────────────────────────────────────────────────
+    # "starter" is Render's free tier. Upgrade to "standard" for
+    # always-on (free tier spins down after 15 min inactivity).
+    plan: starter
+
+    # ── Environment Variables ──────────────────────────────────
+    # Non-secret values are listed here as defaults.
+    # SECRET values (keys, passwords) must be added manually in
+    # the Render dashboard under Service → Environment.
+    # Do NOT put real secrets in this file.
+    envVars:
+      # ── App ──────────────────────────────────────────────────
+      - key: APP_URL
+        value: https://gigasouk.com        # Update to your real frontend URL
+
+      - key: ALLOWED_ORIGINS
+        value: https://gigasouk.com,https://www.gigasouk.com
+
+      # ── QC Settings ──────────────────────────────────────────
+      - key: QC_SCALE_MM_PER_PX
+        value: "0.1"
+
+      - key: QC_TOLERANCE_MM
+        value: "0.5"
+
+      # ── Secrets (add values in Render dashboard, not here) ───
+      - key: SUPABASE_URL
+        sync: false
+
+      - key: SUPABASE_ANON_KEY
+        sync: false
+
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+
+      - key: RAZORPAY_KEY_ID
+        sync: false
+
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+
+      - key: RAZORPAY_ROUTE_ACCOUNT
+        sync: false
+
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+
+      - key: SHIPROCKET_EMAIL
+        sync: false
+
+      - key: SHIPROCKET_PASSWORD
+        sync: false
+
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+
+      - key: TWILIO_WHATSAPP_FROM
+        sync: false
+
+      - key: RESEND_API_KEY
+        sync: false
+
+      - key: RESEND_FROM_EMAIL
+        value: noreply@gigasouk.com
+
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false

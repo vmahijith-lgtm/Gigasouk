@@ -1,0 +1,58 @@
+# ════════════════════════════════════════════════════════════════
+# requirements.txt — GigaSouk Backend Dependencies
+#
+# HOW TO INSTALL (first time):
+#   cd "Gigasouk"                     # project root (where .venv lives)
+#   python3 -m venv .venv             # create venv if it doesn't exist
+#   source .venv/bin/activate         # activate
+#   pip install -r backend/requirements.txt
+#
+# HOW TO INSTALL (venv already exists):
+#   source "/Users/mahi/My Works/Gigasouk/.venv/bin/activate"
+#   pip install -r requirements.txt
+#
+# TO ADD A NEW PACKAGE:
+#   Add it here with a minimum version (~=).
+#   Commit this file — Railway and other CI tools use it.
+# ════════════════════════════════════════════════════════════════
+
+# ── Web Framework ─────────────────────────────────────────────────
+fastapi~=0.115.0              # ASGI web framework
+uvicorn[standard]~=0.29.0    # ASGI server (includes websockets + watchfiles)
+python-multipart~=0.0.9      # Required for file/form uploads (UploadFile)
+setuptools>=65.0.0,<82.0.0    # razorpay imports pkg_resources; setuptools 82+ removed it
+
+# ── Data Validation ───────────────────────────────────────────────
+pydantic~=2.7.0              # Request/response schemas (FastAPI uses this internally)
+
+# ── Authentication ────────────────────────────────────────────────
+PyJWT~=2.8                   # JWT decoding for token verification
+
+# ── Database ──────────────────────────────────────────────────────
+supabase~=2.7.0              # Supabase Python client (auth + DB + storage)
+# supabase allows supafunc 0.3–0.5; 0.4.x lacks DEFAULT_FUNCTION_CLIENT_TIMEOUT required by 2.7.x
+supafunc>=0.5.1,<0.6.0      # Must match supabase’s pin; avoid 0.4.x resolver picks
+python-dotenv~=1.0.1         # Loads .env / .env.local for local dev
+
+# ── Payments ──────────────────────────────────────────────────────
+razorpay~=1.4.1              # Razorpay SDK (order creation, webhook verification)
+
+# ── Notifications ─────────────────────────────────────────────────
+twilio~=8.13.0               # WhatsApp + SMS via Twilio
+resend~=0.8.0                # Transactional email via Resend
+
+# ── Logistics ─────────────────────────────────────────────────────
+httpx~=0.27.0                # Async HTTP client for Shiprocket API calls
+
+# ── Background Scheduling ─────────────────────────────────────────
+apscheduler~=3.10            # In-process scheduler (no separate cron needed)
+                             # Runs inside uvicorn via the FastAPI lifespan hook
+
+# ── AI Quality Control ────────────────────────────────────────────
+opencv-python-headless~=4.9.0.80  # Image processing — headless = no GUI/display
+numpy~=1.26.4                     # Array math used by OpenCV QC engine
+
+# ── NOTE: packages removed from previous version ──────────────────
+# scipy        — imported in requirements but never used in any .py file
+# python-jose  — JWT handling done by Supabase client, not needed here
+# passlib      — password hashing done by Supabase Auth, not needed here

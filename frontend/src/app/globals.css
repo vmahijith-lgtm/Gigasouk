@@ -1,0 +1,116 @@
+/* globals.css — GigaSouk Global Styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand:       #00E5A0;
+  --brand-dark:  #00B87A;
+  --bg:          #060810;
+  --card:        #0C1018;
+  --card2:       #111826;
+  --border:      #1A2230;
+  --t1:          #F4F6FC;
+  --t2:          #B8C4D8;
+  --t3:          #5A6A80;
+  color-scheme: dark;
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
+    overflow-x: clip;
+    background: var(--bg);
+    color: var(--t1);
+    font-family: Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* ── Scrollbar ───────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--card); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--t3); }
+
+/* ── Dark form inputs: undo Chrome/Safari autofill; type=email often gets a different UA skin ─ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--t1) !important;
+  caret-color: var(--t1);
+  box-shadow: 0 0 0 1000px var(--card2) inset !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--card2) inset !important;
+  border: 1px solid var(--border) !important;
+  transition: background-color 99999s ease-out 0s;
+}
+
+input:autofill {
+  box-shadow: 0 0 0 1000px var(--card2) inset !important;
+}
+
+/* ── Reusable utility classes ─────────── */
+@layer components {
+  .gs-card   { @apply bg-[var(--card)] border border-[var(--border)] rounded-[10px]; }
+  .gs-card2  { @apply bg-[var(--card2)] border border-[var(--border)] rounded-[10px]; }
+  .gs-tag    { @apply inline-flex items-center px-[10px] py-[2px] rounded-full text-[11px] font-semibold; }
+  .gs-btn    { @apply px-5 py-[10px] rounded-lg font-semibold text-sm cursor-pointer border-none transition-opacity duration-200; }
+  .gs-btn:hover   { opacity: 0.88; }
+  .gs-btn-green   { background: var(--brand); color: #060810; }
+  .gs-btn-outline { background: transparent; border: 1px solid var(--border); color: var(--t2); }
+  /* Single style for all auth text/email/password fields — use className="gs-input" */
+  .gs-input {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 0.5rem;
+    padding: 10px 14px;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    outline: none;
+    color-scheme: dark;
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: var(--card2) !important;
+    border: 1px solid var(--border);
+    color: var(--t1) !important;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .gs-input::placeholder {
+    color: var(--t3);
+    opacity: 1;
+  }
+  .gs-input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px #00E5A015;
+  }
+  .gs-input:-webkit-autofill,
+  .gs-input:-webkit-autofill:hover,
+  .gs-input:-webkit-autofill:focus,
+  .gs-input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--t1) !important;
+    caret-color: var(--t1);
+    box-shadow: 0 0 0 1000px var(--card2) inset !important;
+    -webkit-box-shadow: 0 0 0 1000px var(--card2) inset !important;
+    border: 1px solid var(--border) !important;
+    transition: background-color 99999s ease-out 0s;
+  }
+  .gs-label  { @apply text-xs font-semibold uppercase tracking-[.06em] block mb-[6px]; color: var(--t3); }
+}
+
+/* ── Animations ─────────────────────────── */
+@keyframes gs-pulse  { 0%,100%{opacity:.35} 50%{opacity:1} }
+@keyframes gs-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+@keyframes gs-slide  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+@keyframes gs-spin   { to{transform:rotate(360deg)} }

@@ -1,0 +1,16 @@
+{
+  // Tell VS Code's CSS language server to ignore unknown @-rules like @tailwind, @apply, @layer
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false,
+
+  // Use PostCSS-aware IntelliSense for .css files (requires Tailwind CSS IntelliSense extension)
+  "tailwindCSS.includeLanguages": {
+    "plaintext": "html",
+    "javascript": "javascript",
+    "typescript": "typescript"
+  },
+  "editor.quickSuggestions": {
+    "strings": "on"
+  }
+}

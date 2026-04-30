@@ -1,0 +1,18 @@
+# ════════════════════════════════════════════════════════════════
+# Procfile — Railway Deployment Entry Point
+#
+# Railway reads this file to know how to start your backend.
+#
+# IMPORTANT: --workers 1 is intentional.
+# APScheduler runs inside the uvicorn process. With 2+ workers,
+# each worker would run its own scheduler, causing duplicate
+# emergency scans, duplicate notifications, and duplicate DB writes.
+# Keep at 1 worker until the scheduler is moved to a separate
+# Railway service or replaced with Railway's built-in cron.
+#
+# TO SCALE (when you need more throughput):
+#   1. Move scheduler.py to a separate Railway service
+#   2. Then increase --workers here freely
+# ════════════════════════════════════════════════════════════════
+
+web: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info --timeout-keep-alive 75

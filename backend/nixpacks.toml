@@ -1,0 +1,25 @@
+# ════════════════════════════════════════════════════════════════
+# nixpacks.toml — System package declarations for Railway (Nixpacks)
+#
+# Railway builds Python apps with Nixpacks. opencv-python-headless
+# requires libGL and libgthread — standard nixpkgs packages.
+# Without these, OpenCV fails to import at runtime on Railway.
+#
+# Docs: https://nixpacks.com/docs/configuration/file
+# ════════════════════════════════════════════════════════════════
+
+[phases.setup]
+# Nix packages installed before pip runs.
+# libGL      → OpenCV's core rendering backend (even headless needs it)
+# glib       → GThread (libgthread-2.0) — needed by OpenCV internals
+nixPkgs = ["libGL", "glib"]
+
+[phases.install]
+# pip install is auto-detected from requirements.txt.
+# Override here only if you need extra flags.
+cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
+
+[start]
+# Overridden by railway.toml deploy.startCommand.
+# Kept here as a fallback in case railway.toml is not picked up.
+cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info --timeout-keep-alive 75"
