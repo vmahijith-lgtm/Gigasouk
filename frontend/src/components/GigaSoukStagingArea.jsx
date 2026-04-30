@@ -42,19 +42,36 @@ export default function GigaSoukStagingArea({ designerId }) {
     if (!designerId) return;
     setLoading(true);
 
-    Promise.all([
-      supabase.from("designs").select("*, manufacturer_commitments(id,status,region_city,committed_price)")
-        .eq("designer_id", designerId).order("created_at", { ascending: false }),
-      supabase.from("regional_price_variants")
-        .select("*, manufacturers(shop_name, city)")
-        .eq("status", "pending")
-        .in("design_id",
-          supabase.from("designs").select("id").eq("designer_id", designerId)
-        ),
-    ]).then(([dRes, vRes]) => {
-      setDesigns(dRes.data || []);
-      setVariants(vRes.data || []);
-    }).finally(() => setLoading(false));
+    (async () => {
+      try {
+        // 1. Fetch designs by this designer (with their commitments)
+        const { data: designRows } = await supabase
+          .from("designs")
+          .select("*, manufacturer_commitments(id,status,region_city,committed_price)")
+          .eq("designer_id", designerId)
+          .order("created_at", { ascending: false });
+
+        const designIds = (designRows || []).map(d => d.id);
+
+        // 2. Fetch pending regional variants ONLY for those designs.
+        //    Supabase .in() needs a concrete array — passing a query builder
+        //    triggers `object is not iterable` at runtime.
+        let variantRows = [];
+        if (designIds.length > 0) {
+          const { data: variantsData } = await supabase
+            .from("regional_price_variants")
+            .select("*, manufacturers(shop_name, city)")
+            .eq("status", "pending")
+            .in("design_id", designIds);
+          variantRows = variantsData || [];
+        }
+
+        setDesigns(designRows || []);
+        setVariants(variantRows);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [designerId]);
 
   function flash(text, type = "success") {

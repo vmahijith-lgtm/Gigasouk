@@ -126,7 +126,12 @@ function SignupForm() {
           city,
           state,
         });
-        router.replace(next);
+        const ROLE_HOME: Record<string, string> = {
+          designer: "/designer", manufacturer: "/manufacturer",
+          admin: "/admin", customer: "/",
+        };
+        const explicitNext = next && next !== "/" ? next : "";
+        window.location.assign(explicitNext || ROLE_HOME[role] || "/");
       } catch (err: any) {
         setError(err.message || "Profile completion failed");
         setLoading(false);
@@ -160,10 +165,12 @@ function SignupForm() {
         await postCreateProfile(authData.session.access_token, {
           fullName, email, role, phone, shopName, city, state
         });
-        // Success — redirect to dashboard
-        if (role === "designer") router.replace("/designer");
-        else if (role === "manufacturer") router.replace("/manufacturer");
-        else router.replace("/");
+        // Success — full page nav so middleware sees the freshly-set cookie.
+        const ROLE_HOME: Record<string, string> = {
+          designer: "/designer", manufacturer: "/manufacturer",
+          admin: "/admin", customer: "/",
+        };
+        window.location.assign(ROLE_HOME[role] || "/");
       } catch (err: any) {
         setError(err.message || "Profile creation failed");
         setLoading(false);

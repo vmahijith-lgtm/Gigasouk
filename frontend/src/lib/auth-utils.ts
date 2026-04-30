@@ -31,7 +31,7 @@ export async function postCreateProfile(
     accessToken: string,
     formState: FormState
 ): Promise<any> {
-    const response = await fetch(`${API_BASE}/auth/create-profile`, {
+    const response = await fetch(`${API_BASE}/api/auth/create-profile`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

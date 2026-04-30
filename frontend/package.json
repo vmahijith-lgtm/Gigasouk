@@ -4,9 +4,10 @@
   "description": "GigaSouk Manufacturing-as-a-Service Platform — gigasouk.com",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
-    "start": "next start",
+    "start": "next dev -H 0.0.0.0 -p 3000",
+    "start:prod": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint"
   },
   "dependencies": {

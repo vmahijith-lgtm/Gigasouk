@@ -35,7 +35,7 @@ export default function GigaSoukDesignerDashboard({ designerId }) {
     setLoading(true);
     Promise.all([
       supabase.from("profiles").select("*").eq("id", designerId).single(),
-      supabase.rpc("get_designer_stats", { designer_id: designerId }),
+      supabase.rpc("get_designer_stats", { p_designer_id: designerId }),
       // Orders for designs owned by this designer
       supabase.from("orders")
         .select("*, designs!inner(title, designer_id)")

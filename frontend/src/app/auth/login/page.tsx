@@ -58,15 +58,25 @@ function LoginForm() {
     const role = profile?.role;
 
     // Respect ?next= redirect param (set by middleware when blocking an unauthenticated visit)
-    const next = params.get("next") ?? "/";
+    // Treat "/" as "no explicit destination" so role homes win for non-customers.
+    const rawNext = params.get("next");
+    const explicitNext = rawNext && rawNext !== "/" ? rawNext : "";
+
     if (!role) {
-      router.replace(`/auth/signup?next=${encodeURIComponent(next)}`);
+      router.replace(`/auth/signup?next=${encodeURIComponent(rawNext || "/")}`);
       return;
     }
-    if (role === "designer") router.replace(next || "/designer");
-    else if (role === "manufacturer") router.replace(next || "/manufacturer");
-    else if (role === "admin") router.replace(next || "/admin");
-    else router.replace(next || "/");
+
+    const ROLE_HOME: Record<string, string> = {
+      designer: "/designer",
+      manufacturer: "/manufacturer",
+      admin: "/admin",
+      customer: "/",
+    };
+
+    // Hard navigation so the middleware re-runs with the new session cookie.
+    const dest = explicitNext || ROLE_HOME[role] || "/";
+    window.location.assign(dest);
   }
 
   async function handleGoogleLogin() {

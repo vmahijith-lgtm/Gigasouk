@@ -190,7 +190,7 @@ def create_profile(
                 "specialisation": req.specialisation or [],
                 "total_designs": 0,
                 "total_earnings": 0,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "joined_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).execute()
             logger.info(f"Created designer extension for profile {profile_id}")
@@ -227,7 +227,7 @@ def create_profile(
                 "queue_depth": 0,
                 "total_jobs": 0,
                 "qc_pass_rate": 0,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "joined_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }).execute()
             logger.info(f"Created manufacturer extension for profile {profile_id}")
@@ -247,3 +247,66 @@ def create_profile(
         "role": req.role,
         "message": "profile_created"
     }, 201
+
+
+# ════════════════════════════════════════════════════════════════
+# ENDPOINT: GET CURRENT USER PROFILE
+# GET /auth/me
+# Returns the authenticated user's profile + (if applicable) the
+# manufacturer / designer extension. Uses the service-role client so
+# we don't depend on per-table RLS policies that may not exist in
+# the user's Supabase project.
+# ════════════════════════════════════════════════════════════════
+
+@router.get("/me")
+def get_me(authorization: Optional[str] = Header(None)):
+    """Return the logged-in user's full profile + role-specific extension."""
+    payload = verify_jwt(authorization)
+    auth_uid = payload.get("sub")
+    if not auth_uid:
+        raise HTTPException(401, "Invalid token: missing 'sub' claim")
+
+    profile = get_one("profiles", {"auth_id": auth_uid})
+    if not profile:
+        return {"profile": None, "manufacturer_id": None, "designer_id": None}
+
+    manufacturer_id = None
+    designer_id = None
+    profile_id = profile["id"]
+    role = profile.get("role")
+
+    try:
+        if role == "manufacturer":
+            mfr = (
+                db_admin.table("manufacturers")
+                .select("id")
+                .eq("profile_id", profile_id)
+                .limit(1)
+                .execute()
+            )
+            if mfr.data:
+                manufacturer_id = mfr.data[0]["id"]
+        elif role == "designer":
+            des = (
+                db_admin.table("designers")
+                .select("id")
+                .eq("profile_id", profile_id)
+                .limit(1)
+                .execute()
+            )
+            if des.data:
+                designer_id = des.data[0]["id"]
+    except Exception as e:
+        logger.warning(f"Extension lookup failed: {e}")
+
+    return {
+        "profile": {
+            "id":        profile_id,
+            "auth_id":   profile.get("auth_id"),
+            "full_name": profile.get("full_name"),
+            "email":     profile.get("email"),
+            "role":      role,
+        },
+        "manufacturer_id": manufacturer_id,
+        "designer_id":     designer_id,
+    }

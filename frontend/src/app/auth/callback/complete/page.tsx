@@ -70,7 +70,7 @@ function CompleteContent() {
                     if (profile) {
                         // Profile exists — redirect to dashboard
                         const destination = ROLE_HOME[profile.role] ?? next;
-                        router.replace(destination);
+                        window.location.assign(destination);
                         setIsProcessing(false);
                         return;
                     }
@@ -90,9 +90,9 @@ function CompleteContent() {
                 // 4. Remove from sessionStorage
                 sessionStorage.removeItem("pending_profile");
 
-                // 5. Redirect to dashboard based on role
+                // 5. Redirect to dashboard based on role (full nav so middleware sees cookies)
                 const destination = ROLE_HOME[pendingProfile.role] ?? next;
-                router.replace(destination);
+                window.location.assign(destination);
                 setIsProcessing(false);
             } catch (err: any) {
                 const errorMsg =

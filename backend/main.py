@@ -93,8 +93,10 @@ app.include_router(broadcast_router,  prefix="/api/v1", tags=["Emergency Broadca
 app.include_router(razorpay_router,   prefix="/api/v1", tags=["Payments"])
 app.include_router(shiprocket_router, prefix="/api/v1", tags=["Shipping & Tracking"])
 
-# ── /auth — Authentication & Profile Creation ────────────────────
-app.include_router(auth_router, prefix="/auth", tags=["auth"])
+# ── /api/auth — Authentication & Profile Creation ────────────────
+# Mounted under /api/* so the Emergent preview ingress routes it to
+# the backend. The frontend calls these via NEXT_PUBLIC_API_URL.
+app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 
 # ── /webhooks — Inbound callbacks from Razorpay & Shiprocket ─────
 # Mounted on a separate, dedicated router so there are no duplicate
