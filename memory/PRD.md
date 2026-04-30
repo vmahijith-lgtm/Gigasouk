@@ -85,7 +85,14 @@
 
 ### P0 (must-do next)
 - Add Razorpay test keys + verify the customer order flow end-to-end.
-- Apply a SELECT policy on the `manufacturers` table in Supabase, OR keep using `/api/auth/me`-style proxies (currently in place for the manufacturer ID lookup).
+- **Apply `/app/migrations/safe_rls.sql` in your Supabase SQL editor** to harden privacy (manufacturer bank info, user emails/phones, designer earnings). Step-by-step guide at `/app/migrations/README.md`.
+
+### Privacy hardening done in this session
+- Added `GET /api/auth/me` backend endpoint (service-role) that returns the owner's full profile + manufacturer/designer extension. The dashboards now use this to read sensitive columns (`wallet_balance`, `email`, `phone`, `bank_account_no`, `bank_ifsc`, `gstin`, `total_earnings`) instead of querying Supabase directly.
+- Wrote `/app/migrations/safe_rls.sql` — a one-shot SQL migration the user runs in Supabase to:
+  - Add `manufacturers_self_read` / `manufacturers_self_update` policies (no public read, bank info safe).
+  - REVOKE `email`, `phone`, `wallet_balance` on `profiles` and `total_earnings` on `designers` from anon/authenticated roles.
+  - Repair several RLS policies that compared `auth.uid()` to `profiles.id` (random UUIDs) instead of `profiles.auth_id` — they were silently denying everything.
 
 ### P1
 - Fix the small visual overlap between user name and Sign Out button on dashboards.

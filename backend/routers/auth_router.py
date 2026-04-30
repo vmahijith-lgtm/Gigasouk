@@ -268,10 +268,10 @@ def get_me(authorization: Optional[str] = Header(None)):
 
     profile = get_one("profiles", {"auth_id": auth_uid})
     if not profile:
-        return {"profile": None, "manufacturer_id": None, "designer_id": None}
+        return {"profile": None, "manufacturer": None, "designer": None}
 
-    manufacturer_id = None
-    designer_id = None
+    manufacturer = None
+    designer = None
     profile_id = profile["id"]
     role = profile.get("role")
 
@@ -279,34 +279,43 @@ def get_me(authorization: Optional[str] = Header(None)):
         if role == "manufacturer":
             mfr = (
                 db_admin.table("manufacturers")
-                .select("id")
+                .select("*")
                 .eq("profile_id", profile_id)
                 .limit(1)
                 .execute()
             )
             if mfr.data:
-                manufacturer_id = mfr.data[0]["id"]
+                manufacturer = mfr.data[0]
         elif role == "designer":
             des = (
                 db_admin.table("designers")
-                .select("id")
+                .select("*")
                 .eq("profile_id", profile_id)
                 .limit(1)
                 .execute()
             )
             if des.data:
-                designer_id = des.data[0]["id"]
+                designer = des.data[0]
     except Exception as e:
         logger.warning(f"Extension lookup failed: {e}")
 
     return {
+        # Full profile, including the columns we revoke from the
+        # frontend roles in safe_rls.sql (email, phone, wallet_balance).
+        # The owner reads them through this endpoint, never directly.
         "profile": {
-            "id":        profile_id,
-            "auth_id":   profile.get("auth_id"),
-            "full_name": profile.get("full_name"),
-            "email":     profile.get("email"),
-            "role":      role,
+            "id":             profile_id,
+            "auth_id":        profile.get("auth_id"),
+            "full_name":      profile.get("full_name"),
+            "email":          profile.get("email"),
+            "phone":          profile.get("phone"),
+            "role":           role,
+            "wallet_balance": float(profile.get("wallet_balance") or 0),
+            "is_active":      profile.get("is_active", True),
         },
-        "manufacturer_id": manufacturer_id,
-        "designer_id":     designer_id,
+        "manufacturer":    manufacturer,
+        "designer":        designer,
+        # Convenience aliases (old shape kept for backward compatibility)
+        "manufacturer_id": manufacturer.get("id") if manufacturer else None,
+        "designer_id":     designer.get("id") if designer else None,
     }

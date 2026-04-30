@@ -12,6 +12,8 @@ import GigaSoukCommitmentBoard from "./GigaSoukCommitmentBoard";
 import { ManufacturerOrderMap } from "./MapComponents";
 import LocationPicker from "./LocationPicker";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
 const C = {
   bg:"#060810", card:"#0C1018", card2:"#111826", border:"#1A2230",
   green:"#00E5A0", gold:"#F5A623", blue:"#4A9EFF", purple:"#A78BFA",
@@ -54,26 +56,49 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId }) {
   useEffect(() => {
     if (!manufacturerId) return;
     setLoading(true);
-    Promise.all([
-      supabase.from("manufacturers").select("*, profiles(*)").eq("id", manufacturerId).single(),
-      supabase.from("orders").select("*, designs(title), qc_records(*)")
-        .eq("manufacturer_id", manufacturerId)
-        .not("status", "in", '("delivered","cancelled","refunded")')
-        .order("created_at", { ascending:false }),
-      // Payouts: fetch via order_ids belonging to this manufacturer
-      supabase.from("orders").select("id").eq("manufacturer_id", manufacturerId)
-        .then(async ({ data: orderRows }) => {
-          if (!orderRows?.length) return { data: [] };
-          const ids = orderRows.map(r => r.id);
-          return supabase.from("payouts").select("*, orders(order_ref)")
-            .in("order_id", ids).order("released_at", { ascending:false }).limit(30);
-        }),
-    ]).then(([mRes, jRes, pRes]) => {
-      setMfr(mRes.data || {});
-      setProfile(mRes.data?.profiles || {});
-      setJobs(jRes.data || []);
-      setPayouts(pRes.data || []);
-    }).finally(() => setLoading(false));
+
+    // Sensitive owner data (bank info, email, phone, full manufacturer
+    // record) is now fetched through the backend /api/auth/me — RLS
+    // hides those columns from the frontend role on purpose.
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const [meRes, jRes, oIdsRes] = await Promise.all([
+          token
+            ? fetch(`${API_BASE}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+              }).then(r => (r.ok ? r.json() : null))
+            : Promise.resolve(null),
+          supabase.from("orders").select("*, designs(title), qc_records(*)")
+            .eq("manufacturer_id", manufacturerId)
+            .not("status", "in", '("delivered","cancelled","refunded")')
+            .order("created_at", { ascending: false }),
+          supabase.from("orders").select("id").eq("manufacturer_id", manufacturerId),
+        ]);
+
+        // Payouts: query payouts only for the manufacturer's orders
+        let payoutRows = [];
+        if (oIdsRes.data?.length) {
+          const ids = oIdsRes.data.map(r => r.id);
+          const { data: payouts } = await supabase
+            .from("payouts")
+            .select("*, orders(order_ref)")
+            .in("order_id", ids)
+            .order("released_at", { ascending: false })
+            .limit(30);
+          payoutRows = payouts || [];
+        }
+
+        setMfr(meRes?.manufacturer || {});
+        setProfile(meRes?.profile || {});
+        setJobs(jRes.data || []);
+        setPayouts(payoutRows);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [manufacturerId]);
 
   // ── Realtime: refresh jobs on order update ──────────────────────

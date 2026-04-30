@@ -7,6 +7,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import GigaSoukStagingArea from "./GigaSoukStagingArea";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
 const C = {
   bg:"#060810",card:"#0C1018",card2:"#111826",border:"#1A2230",
   green:"#00E5A0",gold:"#F5A623",blue:"#4A9EFF",purple:"#A78BFA",
@@ -33,23 +35,42 @@ export default function GigaSoukDesignerDashboard({ designerId }) {
   useEffect(() => {
     if (!designerId) return;
     setLoading(true);
-    Promise.all([
-      supabase.from("profiles").select("*").eq("id", designerId).single(),
-      supabase.rpc("get_designer_stats", { p_designer_id: designerId }),
-      // Orders for designs owned by this designer
-      supabase.from("orders")
-        .select("*, designs!inner(title, designer_id)")
-        .eq("designs.designer_id", designerId)
-        .order("created_at", { ascending: false }).limit(20),
-      supabase.from("wallet_txns").select("*").eq("profile_id", designerId)
-        .order("created_at", { ascending: false }).limit(30),
-    ]).then(([pRes, sRes, oRes, wRes]) => {
-      setProfile(pRes.data || {});
-      setStats(sRes.data?.[0] || {});
-      setOrders(oRes.data || []);
-      setTxns(wRes.data || []);
-      setWallet(pRes.data?.wallet_balance || 0);
-    }).finally(() => setLoading(false));
+
+    // Fetch sensitive owner data (wallet_balance, email, phone) through
+    // the backend /api/auth/me — Supabase RLS hides those columns from
+    // the frontend role on purpose. Other (non-sensitive) data still
+    // comes from Supabase directly.
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const [meRes, sRes, oRes, wRes] = await Promise.all([
+          token
+            ? fetch(`${API_BASE}/api/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+              }).then(r => (r.ok ? r.json() : null))
+            : Promise.resolve(null),
+          supabase.rpc("get_designer_stats", { p_designer_id: designerId }),
+          // Orders for designs owned by this designer
+          supabase.from("orders")
+            .select("*, designs!inner(title, designer_id)")
+            .eq("designs.designer_id", designerId)
+            .order("created_at", { ascending: false }).limit(20),
+          supabase.from("wallet_txns").select("*").eq("profile_id", designerId)
+            .order("created_at", { ascending: false }).limit(30),
+        ]);
+
+        const me = meRes?.profile || {};
+        setProfile(me);
+        setStats(sRes.data?.[0] || {});
+        setOrders(oRes.data || []);
+        setTxns(wRes.data || []);
+        setWallet(me.wallet_balance || 0);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [designerId]);
 
   const statusColor = { live:"#00E5A0", seeking:"#F5A623", committed:"#4A9EFF", draft:"#5A6A80", paused:"#F87171" };
