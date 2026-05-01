@@ -6,7 +6,7 @@
 // ════════════════════════════════════════════════════════════════
 "use client";
 
-import { useEffect, Suspense } from "react";
+import { useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
@@ -15,47 +15,69 @@ const C = { bg: "#060810", t3: "#5A6A80" };
 function CallbackHandler() {
   const router = useRouter();
   const params = useSearchParams();
+  // React 18 Strict Mode re-runs useEffect twice in dev.  PKCE codes
+  // are one-shot — the second exchange of the same code throws
+  // `flow_state_already_used` and wipes the successful first run.
+  // This ref guarantees we only run the flow once per mount.
+  const ranRef = useRef(false);
 
   useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
+
     const code = params.get("code");
     const next = params.get("next") ?? "/";
     const nextEncoded = encodeURIComponent(next);
 
-    if (code) {
-      // ── PKCE flow: exchange authorization code for session ─────
-      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
-        if (error || !data.session) {
-          router.replace("/auth/login?error=session_failed");
-          return;
-        }
+    // Belt-and-braces: if the browser already has a session (e.g. the
+    // first useEffect invocation finished before cleanup), skip the
+    // exchange entirely and go straight to the completion page.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
         router.replace(`/auth/callback/complete?next=${nextEncoded}`);
-      });
-    } else {
-      // ── Implicit flow: token arrives in URL hash ───────────────
-      // Supabase JS automatically parses #access_token and fires SIGNED_IN.
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        (event, session) => {
-          if (event === "SIGNED_IN" && session) {
-            subscription.unsubscribe();
-            router.replace(`/auth/callback/complete?next=${nextEncoded}`);
-          } else if (event === "SIGNED_OUT") {
-            subscription.unsubscribe();
-            router.replace("/auth/login?error=session_failed");
+        return;
+      }
+
+      if (code) {
+        // ── PKCE flow: exchange authorization code for session ─────
+        supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+          if (error || !data.session) {
+            // One more chance — maybe a concurrent exchange already
+            // created the session. Check once before giving up.
+            supabase.auth.getSession().then(({ data: { session: retry } }) => {
+              if (retry) {
+                router.replace(`/auth/callback/complete?next=${nextEncoded}`);
+              } else {
+                console.error("OAuth exchange failed:", error);
+                router.replace("/auth/login?error=session_failed");
+              }
+            });
+            return;
           }
-        }
-      );
+          router.replace(`/auth/callback/complete?next=${nextEncoded}`);
+        });
+      } else {
+        // ── Implicit flow: token arrives in URL hash ───────────────
+        // Supabase JS automatically parses #access_token and fires SIGNED_IN.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          (event, sess) => {
+            if (event === "SIGNED_IN" && sess) {
+              subscription.unsubscribe();
+              router.replace(`/auth/callback/complete?next=${nextEncoded}`);
+            } else if (event === "SIGNED_OUT") {
+              subscription.unsubscribe();
+              router.replace("/auth/login?error=session_failed");
+            }
+          }
+        );
 
-      // Safety net: if neither event fires in 10s, bail out
-      const timeout = setTimeout(() => {
-        subscription.unsubscribe();
-        router.replace("/auth/login?error=session_failed");
-      }, 10_000);
-
-      return () => {
-        subscription.unsubscribe();
-        clearTimeout(timeout);
-      };
-    }
+        // Safety net: if neither event fires in 10s, bail out
+        setTimeout(() => {
+          subscription.unsubscribe();
+          router.replace("/auth/login?error=session_failed");
+        }, 10_000);
+      }
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
