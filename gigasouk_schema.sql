@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     role            user_role NOT NULL DEFAULT 'customer',
     avatar_url      TEXT,
     wallet_balance  NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    preferred_delivery JSONB NOT NULL DEFAULT '{}'::jsonb,
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -595,17 +596,53 @@ CREATE POLICY "profiles_edit_own"
     ON profiles FOR UPDATE
     USING (auth.uid() = auth_id);
 
+-- Sensitive profile columns: hidden from other users (owner reads via service-role /api/auth/me)
+REVOKE SELECT (email, phone, wallet_balance) ON profiles FROM anon;
+REVOKE SELECT (email, phone, wallet_balance) ON profiles FROM authenticated;
+
+-- ── manufacturers — self read/update only (marketplace uses backend, not direct SELECT)
+DROP POLICY IF EXISTS "manufacturers_self_read" ON manufacturers;
+DROP POLICY IF EXISTS "manufacturers_self_update" ON manufacturers;
+
+CREATE POLICY "manufacturers_self_read"
+    ON manufacturers FOR SELECT
+    USING (
+        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
+
+CREATE POLICY "manufacturers_self_update"
+    ON manufacturers FOR UPDATE
+    USING (
+        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
+
 -- ── designs ──────────────────────────────────────────────────────
+-- designer_id references profiles(id), NOT auth.users — compare via profiles.auth_id
 DROP POLICY IF EXISTS "designs_read_live" ON designs;
 DROP POLICY IF EXISTS "designs_edit_own"  ON designs;
 
 CREATE POLICY "designs_read_live"
     ON designs FOR SELECT
-    USING (status = 'live' OR designer_id = auth.uid());
+    USING (
+        status = 'live'
+        OR designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        OR id IN (
+            SELECT mc.design_id
+            FROM manufacturer_commitments mc
+            INNER JOIN manufacturers m ON m.id = mc.manufacturer_id
+            INNER JOIN profiles p ON p.id = m.profile_id
+            WHERE p.auth_id = auth.uid()
+        )
+    );
 
 CREATE POLICY "designs_edit_own"
     ON designs FOR ALL
-    USING (designer_id = auth.uid());
+    USING (
+        designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    )
+    WITH CHECK (
+        designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
 
 -- ── orders ───────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "orders_read_own_customer"     ON orders;
@@ -613,13 +650,16 @@ DROP POLICY IF EXISTS "orders_read_own_manufacturer" ON orders;
 
 CREATE POLICY "orders_read_own_customer"
     ON orders FOR SELECT
-    USING (customer_id = auth.uid());
+    USING (
+        customer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
 
 CREATE POLICY "orders_read_own_manufacturer"
     ON orders FOR SELECT
     USING (
         manufacturer_id IN (
-            SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
     );
 
@@ -629,9 +669,10 @@ DROP POLICY IF EXISTS "rooms_read_participants" ON negotiation_rooms;
 CREATE POLICY "rooms_read_participants"
     ON negotiation_rooms FOR SELECT
     USING (
-        designer_id = auth.uid()
+        designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         OR manufacturer_id IN (
-            SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
     );
 
@@ -644,16 +685,19 @@ CREATE POLICY "messages_read_participants"
     USING (
         room_id IN (
             SELECT id FROM negotiation_rooms
-            WHERE designer_id = auth.uid()
+            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
                OR manufacturer_id IN (
-                   SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+                   SELECT id FROM manufacturers
+                   WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
                )
         )
     );
 
 CREATE POLICY "messages_insert_own"
     ON messages FOR INSERT
-    WITH CHECK (sender_id = auth.uid());
+    WITH CHECK (
+        sender_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
 
 -- ── manufacturer_commitments ─────────────────────────────────────
 DROP POLICY IF EXISTS "commitments_read_own" ON manufacturer_commitments;
@@ -662,10 +706,12 @@ CREATE POLICY "commitments_read_own"
     ON manufacturer_commitments FOR SELECT
     USING (
         manufacturer_id IN (
-            SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
         OR design_id IN (
-            SELECT id FROM designs WHERE designer_id = auth.uid()
+            SELECT id FROM designs
+            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
     );
 
@@ -674,7 +720,9 @@ DROP POLICY IF EXISTS "wallet_read_own" ON wallet_txns;
 
 CREATE POLICY "wallet_read_own"
     ON wallet_txns FOR SELECT
-    USING (profile_id = auth.uid());
+    USING (
+        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
 
 -- ── qc_records ───────────────────────────────────────────────────
 DROP POLICY IF EXISTS "qc_read_manufacturer"   ON qc_records;
@@ -684,7 +732,8 @@ CREATE POLICY "qc_read_manufacturer"
     ON qc_records FOR SELECT
     USING (
         manufacturer_id IN (
-            SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
     );
 
@@ -692,7 +741,8 @@ CREATE POLICY "qc_insert_manufacturer"
     ON qc_records FOR INSERT
     WITH CHECK (
         manufacturer_id IN (
-            SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
     );
 
@@ -705,16 +755,19 @@ CREATE POLICY "bids_read_participants"
     USING (
         negotiation_room_id IN (
             SELECT id FROM negotiation_rooms
-            WHERE designer_id = auth.uid()
+            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
                OR manufacturer_id IN (
-                   SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+                   SELECT id FROM manufacturers
+                   WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
                )
         )
     );
 
 CREATE POLICY "bids_insert_own"
     ON bids FOR INSERT
-    WITH CHECK (bidder_id = auth.uid());
+    WITH CHECK (
+        bidder_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
 
 -- ── payouts ───────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "payouts_read_designer"     ON payouts;
@@ -727,7 +780,9 @@ CREATE POLICY "payouts_read_designer"
             SELECT o.id
             FROM orders o
             JOIN designs d ON o.design_id = d.id
-            WHERE d.designer_id = auth.uid()
+            WHERE d.designer_id IN (
+                SELECT id FROM profiles WHERE auth_id = auth.uid()
+            )
         )
     );
 
@@ -737,7 +792,8 @@ CREATE POLICY "payouts_read_manufacturer"
         order_id IN (
             SELECT id FROM orders
             WHERE manufacturer_id IN (
-                SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+                SELECT id FROM manufacturers
+                WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
             )
         )
     );
@@ -757,6 +813,9 @@ CREATE POLICY "designers_edit_own"
             SELECT id FROM profiles WHERE auth_id = auth.uid()
         )
     );
+
+REVOKE SELECT (total_earnings) ON designers FROM anon;
+REVOKE SELECT (total_earnings) ON designers FROM authenticated;
 
 -- ── notification_log ─────────────────────────────────────────────
 DROP POLICY IF EXISTS "notif_read_own" ON notification_log;
@@ -781,10 +840,12 @@ CREATE POLICY "variants_read_own"
     ON regional_price_variants FOR SELECT
     USING (
         design_id IN (
-            SELECT id FROM designs WHERE designer_id = auth.uid()
+            SELECT id FROM designs
+            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
         OR manufacturer_id IN (
-            SELECT id FROM manufacturers WHERE profile_id = auth.uid()
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
     );
 
@@ -890,7 +951,7 @@ CREATE OR REPLACE FUNCTION can_design_go_live(p_design_id UUID)
 RETURNS BOOLEAN AS $$
 DECLARE
     active_count INTEGER;
-    min_commits  CONSTANT INTEGER := 2;
+    min_commits  CONSTANT INTEGER := 1;
 BEGIN
     SELECT COUNT(*) INTO active_count
     FROM manufacturer_commitments
@@ -992,7 +1053,7 @@ CREATE OR REPLACE FUNCTION maybe_advance_design_to_committed(p_design_id UUID)
 RETURNS VOID AS $$
 DECLARE
     active_count INTEGER;
-    min_commits  CONSTANT INTEGER := 2;
+    min_commits  CONSTANT INTEGER := 1;
 BEGIN
     SELECT COUNT(*) INTO active_count
     FROM manufacturer_commitments

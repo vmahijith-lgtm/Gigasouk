@@ -2,10 +2,32 @@
 // Every call to the FastAPI backend is a named function here.
 // TO CHANGE THE API URL: update NEXT_PUBLIC_API_URL in .env.local
 import axios from "axios";
+import { supabase } from "./supabase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const api = axios.create({ baseURL: API_BASE, timeout: 15000 });
+
+// Attach the current user's JWT on every outbound request.
+// Endpoints that don't verify the token simply ignore the header.
+api.interceptors.request.use(async (config) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+  } catch {
+    // Continue without a token — unauthenticated endpoints still work.
+  }
+  return config;
+});
+
+// ── Public catalog (service role on server; no auth required) ────
+export const getCatalogDesigns = () => api.get("/api/v1/catalog/designs");
+
+// ── Customer profile (preferred delivery) ────────────────────────
+export const updatePreferredDelivery = (data: object) =>
+  api.patch("/api/auth/me/preferred-delivery", data);
 
 // ── Orders ────────────────────────────────────────────────────────
 export const placeOrder        = (data: object)         => api.post("/api/v1/orders", data);

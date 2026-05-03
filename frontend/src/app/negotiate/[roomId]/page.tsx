@@ -61,11 +61,12 @@ export default function NegotiationRoomPage() {
       </div>
 
       {/* Negotiation Room component */}
-      <div style={{ maxWidth: 700, margin: "0 auto" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <GigaSoukNegotiationRoom
           roomId={roomId}
           userId={user.profileId}
           userRole={userRole}
+          manufacturerId={user.manufacturerId ?? undefined}
         />
       </div>
     </div>

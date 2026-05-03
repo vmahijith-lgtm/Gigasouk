@@ -8,7 +8,10 @@
 // ════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import { getAvailableDesigns, createCommitment } from "../lib/api";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 // ── Design Tokens ─────────────────────────────────────────────────
 const C = {
@@ -18,20 +21,28 @@ const C = {
 };
 
 // ════════════════════════════════════════════════════════════════
-export default function GigaSoukCommitmentBoard({ manufacturerId }) {
+export default function GigaSoukCommitmentBoard({
+  manufacturerId,
+  /** From Workshop Profile / manufacturers row — used as commitment region (no manual entry). */
+  workshopCity = "",
+  workshopState = "",
+  onOpenWorkshopProfile,
+  /** Called after a successful commit — e.g. switch dashboard tab to Active Jobs. */
+  onCommitted,
+  refreshKey = 0,
+}) {
 // ════════════════════════════════════════════════════════════════
 
   const [designs,        setDesigns]        = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [selected,       setSelected]       = useState(null);
   const [commitPrice,    setCommitPrice]    = useState("");
-  const [regionCity,     setRegionCity]     = useState("");
-  const [regionState,    setRegionState]    = useState("");
   const [variantReason,  setVariantReason]  = useState("");
   const [committing,     setCommitting]     = useState(false);
   const [successId,      setSuccessId]      = useState(null);
   const [error,          setError]          = useState("");
   const [filter,         setFilter]         = useState("all");
+  const [cadLoading,     setCadLoading]     = useState(false);
 
   // ── Load available designs ──────────────────────────────────────
   useEffect(() => {
@@ -41,22 +52,24 @@ export default function GigaSoukCommitmentBoard({ manufacturerId }) {
       .then(r => setDesigns(r.data || []))
       .catch(() => setError("Could not load designs. Check your connection."))
       .finally(() => setLoading(false));
-  }, [manufacturerId]);
+  }, [manufacturerId, refreshKey]);
 
   // ── Open detail panel ───────────────────────────────────────────
   function openDesign(design) {
     setSelected(design);
     setCommitPrice(String(design.base_price));
-    setRegionCity("");
-    setRegionState("");
     setVariantReason("");
     setError("");
   }
 
   // ── Submit commitment ───────────────────────────────────────────
   async function handleCommit() {
-    if (!regionCity.trim() || !regionState.trim()) {
-      setError("Please enter your city and state.");
+    const city = (workshopCity || "").trim();
+    const state = (workshopState || "").trim();
+    if (!city || !state) {
+      setError(
+        "Your workshop city and state are missing. Set them under Workshop Profile → Location, then try again.",
+      );
       return;
     }
     const price = parseFloat(commitPrice);
@@ -72,21 +85,47 @@ export default function GigaSoukCommitmentBoard({ manufacturerId }) {
     setCommitting(true);
     setError("");
     try {
+      // region_city / region_state are resolved on the server from manufacturers.city/state
       await createCommitment({
         design_id:       selected.id,
         manufacturer_id: manufacturerId,
         committed_price: price,
-        region_city:     regionCity,
-        region_state:    regionState,
         notes:           variantReason,
       });
       setSuccessId(selected.id);
       setSelected(null);
       setDesigns(prev => prev.filter(d => d.id !== selected.id));
+      if (typeof onCommitted === "function") {
+        window.setTimeout(() => onCommitted(), 700);
+      }
     } catch (e) {
       setError(e?.response?.data?.detail || "Commit failed. Please try again.");
     } finally {
       setCommitting(false);
+    }
+  }
+
+  // ── Open CAD file in new tab via backend signed URL ─────────────
+  async function handleViewCad(designId) {
+    setCadLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setError("You must be signed in to view CAD files."); return; }
+
+      const res = await fetch(`${API_BASE}/api/v1/designs/${designId}/cad-url`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Error ${res.status}`);
+      }
+      const { signed_url } = await res.json();
+      if (signed_url) window.open(signed_url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(e.message || "Could not open CAD file.");
+    } finally {
+      setCadLoading(false);
     }
   }
 
@@ -105,8 +144,21 @@ export default function GigaSoukCommitmentBoard({ manufacturerId }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: C.t1 }}>Commitment Board</h2>
-          <p style={{ fontSize: 13, color: C.t3, marginTop: 3 }}>
-            Designs seeking manufacturers — commit to earn steady orders
+          <p style={{ fontSize: 13, color: C.t3, marginTop: 3, lineHeight: 1.5 }}>
+            Designs seeking manufacturers. You only see jobs whose required machine and material tags are all listed on
+            your{" "}
+            {typeof onOpenWorkshopProfile === "function" ? (
+              <button type="button" onClick={() => onOpenWorkshopProfile()}
+                style={{
+                  background: "none", border: "none", padding: 0, color: C.green,
+                  fontWeight: 700, cursor: "pointer", fontSize: 13, textDecoration: "underline",
+                }}>
+                Workshop Profile
+              </button>
+            ) : (
+              "Workshop Profile"
+            )}
+            .
           </p>
         </div>
         <span style={{ background: C.green + "22", border: `1px solid ${C.green}`, borderRadius: 20,
@@ -114,6 +166,24 @@ export default function GigaSoukCommitmentBoard({ manufacturerId }) {
           {designs.length} available
         </span>
       </div>
+
+      {!loading && designs.length > 0 && (
+        <p style={{ fontSize: 12, color: C.t3, marginBottom: 14, lineHeight: 1.5 }}>
+          Not seeing a design you expected? Your{" "}
+          {typeof onOpenWorkshopProfile === "function" ? (
+            <button type="button" onClick={() => onOpenWorkshopProfile()}
+              style={{
+                background: "none", border: "none", padding: 0, color: C.green,
+                fontWeight: 700, cursor: "pointer", fontSize: 12, textDecoration: "underline",
+              }}>
+              Workshop Profile
+            </button>
+          ) : (
+            "Workshop Profile"
+          )}{" "}
+          must list every machine and material tag that design requires.
+        </p>
+      )}
 
       {/* Category filter */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
@@ -141,9 +211,34 @@ export default function GigaSoukCommitmentBoard({ manufacturerId }) {
 
       {/* Design cards grid */}
       {!loading && filtered.length === 0 && (
-        <div style={{ textAlign: "center", padding: 60, color: C.t3 }}>
-          <p style={{ fontSize: 16 }}>No designs available right now.</p>
-          <p style={{ fontSize: 13, marginTop: 8 }}>Check back soon — designers upload new products regularly.</p>
+        <div style={{
+          textAlign: "left", padding: "28px 24px", color: C.t3,
+          background: C.card2, border: `1px solid ${C.border}`, borderRadius: 12, maxWidth: 560,
+        }}>
+          <p style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 12 }}>
+            Nothing on the board yet
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
+            Designs only appear here when all of the following are true:
+          </p>
+          <ul style={{ fontSize: 13, lineHeight: 1.75, margin: 0, paddingLeft: 20 }}>
+            <li>The designer clicked <strong style={{ color: C.gold }}>Seek Commitments</strong> (draft designs stay private).</li>
+            <li>Your profile lists every <strong style={{ color: C.blue }}>machine</strong> and <strong style={{ color: C.green }}>material</strong> tag required on that design.</li>
+          </ul>
+          <p style={{ fontSize: 12, marginTop: 16, color: C.t3, marginBottom: 14 }}>
+            Update <strong style={{ color: C.t2 }}>Machines</strong> and <strong style={{ color: C.t2 }}>Materials</strong>{" "}
+            on your Workshop Profile tab if you expect to match more jobs.
+          </p>
+          {typeof onOpenWorkshopProfile === "function" && (
+            <button type="button" onClick={() => onOpenWorkshopProfile()}
+              style={{
+                padding: "11px 22px", borderRadius: 10, border: `1px solid ${C.green}`,
+                background: C.green + "22", color: C.green, fontWeight: 700, fontSize: 13,
+                cursor: "pointer",
+              }}>
+              Open Workshop Profile →
+            </button>
+          )}
         </div>
       )}
 
@@ -159,16 +254,17 @@ export default function GigaSoukCommitmentBoard({ manufacturerId }) {
           design={selected}
           commitPrice={commitPrice}
           setCommitPrice={setCommitPrice}
-          regionCity={regionCity}
-          setRegionCity={setRegionCity}
-          regionState={regionState}
-          setRegionState={setRegionState}
+          workshopCity={workshopCity}
+          workshopState={workshopState}
           variantReason={variantReason}
           setVariantReason={setVariantReason}
           committing={committing}
+          cadLoading={cadLoading}
           error={error}
           onCommit={handleCommit}
+          onViewCad={() => handleViewCad(selected.id)}
           onClose={() => setSelected(null)}
+          onOpenWorkshopProfile={onOpenWorkshopProfile}
           colors={C}
         />
       )}
@@ -180,12 +276,34 @@ export default function GigaSoukCommitmentBoard({ manufacturerId }) {
 // DESIGN CARD
 // ════════════════════════════════════════════════════════════════
 function DesignCard({ design, onOpen, colors: C }) {
-  const daysSeeking = design.days_seeking || 0;
+  const daysSeeking = design.days_seeking ?? 0;
   const urgent      = daysSeeking >= 2;
+  const preview     = design.preview_image_url;
 
   return (
     <div onClick={() => onOpen(design)} style={{ background: C.card, border: `1px solid ${urgent ? C.gold + "88" : C.border}`,
-      borderRadius: 10, padding: 18, cursor: "pointer", transition: "border-color .2s" }}>
+      borderRadius: 12, overflow: "hidden", cursor: "pointer", transition: "border-color .2s" }}>
+
+      {/* Preview image — large enough to judge the part */}
+      <div style={{
+        width: "100%", height: 160, background: C.card2,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        borderBottom: `1px solid ${C.border}`,
+      }}>
+        {preview ? (
+          <img
+            src={preview}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        ) : (
+          <span style={{ fontSize: 13, color: C.t3, padding: 16, textAlign: "center" }}>
+            No preview image — open card for full spec & CAD
+          </span>
+        )}
+      </div>
+
+      <div style={{ padding: 18 }}>
 
       {/* Top: title + urgent badge */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
@@ -216,7 +334,11 @@ function DesignCard({ design, onOpen, colors: C }) {
         ))}
       </div>
 
+      {design.designer_name && (
+        <p style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>Designer: {design.designer_name}</p>
+      )}
       <p style={{ fontSize: 12, color: C.t3 }}>Tap to view specs and commit →</p>
+      </div>
     </div>
   );
 }
@@ -224,9 +346,9 @@ function DesignCard({ design, onOpen, colors: C }) {
 // ════════════════════════════════════════════════════════════════
 // COMMIT PANEL (overlay)
 // ════════════════════════════════════════════════════════════════
-function CommitPanel({ design, commitPrice, setCommitPrice, regionCity, setRegionCity,
-  regionState, setRegionState, variantReason, setVariantReason,
-  committing, error, onCommit, onClose, colors: C }) {
+function CommitPanel({ design, commitPrice, setCommitPrice, workshopCity, workshopState,
+  variantReason, setVariantReason,
+  committing, cadLoading, error, onCommit, onViewCad, onClose, onOpenWorkshopProfile, colors: C }) {
 
   const isVariant   = Math.abs(parseFloat(commitPrice) - design.base_price) > 0.01;
   const priceDiff   = parseFloat(commitPrice) - design.base_price;
@@ -243,9 +365,65 @@ function CommitPanel({ design, commitPrice, setCommitPrice, regionCity, setRegio
           color: C.t3, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
 
         <h3 style={{ fontSize: 18, fontWeight: 700, color: C.t1, marginBottom: 4 }}>{design.title}</h3>
-        <p style={{ fontSize: 13, color: C.t3, marginBottom: 20 }}>
+        {design.designer_name && (
+          <p style={{ fontSize: 12, color: C.t3, marginBottom: 8 }}>Designer: {design.designer_name}</p>
+        )}
+        <p style={{ fontSize: 13, color: C.t3, marginBottom: 12 }}>
           Review the spec, set your committed price, enter your region.
         </p>
+        <p style={{
+          fontSize: 12, color: C.gold, marginBottom: 16, lineHeight: 1.55,
+          background: C.gold + "12", border: `1px solid ${C.gold}44`, borderRadius: 8, padding: "10px 12px",
+        }}>
+          Required tags below must already be on your{" "}
+          {typeof onOpenWorkshopProfile === "function" ? (
+            <button type="button" onClick={() => { onClose(); onOpenWorkshopProfile(); }}
+              style={{
+                background: "none", border: "none", padding: 0, color: C.green,
+                fontWeight: 700, cursor: "pointer", textDecoration: "underline", fontSize: 12,
+              }}>
+              Workshop Profile
+            </button>
+          ) : (
+            "Workshop Profile"
+          )}{" "}
+          for this design to appear on your board.
+        </p>
+
+        {(((design.required_machines || []).length > 0) || ((design.required_materials || []).length > 0)) && (
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.t3, letterSpacing: ".06em", marginBottom: 8 }}>
+              REQUIRED ON THIS DESIGN
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {(design.required_machines || []).map(m => (
+                <span key={`m-${m}`} style={{
+                  background: C.blue + "22", border: `1px solid ${C.blue}55`, borderRadius: 4,
+                  padding: "4px 10px", fontSize: 11, color: C.blue,
+                }}>{m}</span>
+              ))}
+              {(design.required_materials || []).map(m => (
+                <span key={`mat-${m}`} style={{
+                  background: C.t3 + "22", border: `1px solid ${C.border}`, borderRadius: 4,
+                  padding: "4px 10px", fontSize: 11, color: C.t3,
+                }}>{m}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {design.preview_image_url && (
+          <div style={{
+            marginBottom: 20, borderRadius: 10, overflow: "hidden",
+            border: `1px solid ${C.border}`, background: C.card2,
+          }}>
+            <img
+              src={design.preview_image_url}
+              alt="Design preview"
+              style={{ width: "100%", maxHeight: 280, objectFit: "contain", display: "block" }}
+            />
+          </div>
+        )}
 
         {/* Spec */}
         {design.description && (
@@ -254,7 +432,7 @@ function CommitPanel({ design, commitPrice, setCommitPrice, regionCity, setRegio
 
         {/* Base price reference */}
         <div style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8,
-          padding: "12px 16px", marginBottom: 20 }}>
+          padding: "12px 16px", marginBottom: 14 }}>
           <p style={{ fontSize: 11, color: C.t3, marginBottom: 4 }}>DESIGNER'S BASE PRICE</p>
           <p style={{ fontSize: 24, fontWeight: 800, color: C.green }}>
             ₹{Number(design.base_price).toLocaleString("en-IN")}
@@ -263,6 +441,23 @@ function CommitPanel({ design, commitPrice, setCommitPrice, regionCity, setRegio
             Match this price to get instant approval. Enter a different price to request a regional variant.
           </p>
         </div>
+
+        {/* CAD file download */}
+        {design.cad_file_url && (
+          <button
+            type="button"
+            onClick={onViewCad}
+            disabled={cadLoading}
+            style={{
+              width: "100%", padding: "10px 0", borderRadius: 8, marginBottom: 20,
+              border: `1px solid ${C.blue}`, background: C.blue + "18",
+              color: cadLoading ? C.t3 : C.blue, fontWeight: 600, fontSize: 13,
+              cursor: cadLoading ? "not-allowed" : "pointer", letterSpacing: ".02em",
+            }}
+          >
+            {cadLoading ? "Opening file…" : "📎 View / Download CAD File"}
+          </button>
+        )}
 
         {/* Your price */}
         <label style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: "uppercase",
@@ -280,24 +475,50 @@ function CommitPanel({ design, commitPrice, setCommitPrice, regionCity, setRegio
           </p>
         )}
 
-        {/* Region */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: "uppercase",
-              letterSpacing: ".06em", display: "block", marginBottom: 6 }}>Your City</label>
-            <input value={regionCity} onChange={e => setRegionCity(e.target.value)}
-              placeholder="e.g. Bengaluru"
-              style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8,
-                padding: "10px 14px", color: C.t1, fontSize: 14, width: "100%", outline: "none" }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: "uppercase",
-              letterSpacing: ".06em", display: "block", marginBottom: 6 }}>State</label>
-            <input value={regionState} onChange={e => setRegionState(e.target.value)}
-              placeholder="e.g. Karnataka"
-              style={{ background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8,
-                padding: "10px 14px", color: C.t1, fontSize: 14, width: "100%", outline: "none" }} />
-          </div>
+        {/* Region — from workshop profile (manufacturer credentials) */}
+        <div style={{
+          background: C.card2,
+          border: `1px solid ${(workshopCity || "").trim() && (workshopState || "").trim() ? C.green + "44" : C.gold + "55"}`,
+          borderRadius: 8,
+          padding: "12px 14px",
+          marginBottom: 16,
+        }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: C.t3, textTransform: "uppercase",
+            letterSpacing: ".06em", marginBottom: 8 }}>Commitment region</p>
+          {(workshopCity || "").trim() && (workshopState || "").trim() ? (
+            <p style={{ fontSize: 14, fontWeight: 600, color: C.t1 }}>
+              {(workshopCity || "").trim()}, {(workshopState || "").trim()}
+              <span style={{ fontSize: 12, fontWeight: 400, color: C.t3, display: "block", marginTop: 6 }}>
+                Taken from your workshop location. To change it, update{" "}
+                {typeof onOpenWorkshopProfile === "function" ? (
+                  <button type="button" onClick={() => { onClose(); onOpenWorkshopProfile(); }}
+                    style={{
+                      background: "none", border: "none", padding: 0, color: C.green,
+                      fontWeight: 700, cursor: "pointer", textDecoration: "underline", fontSize: 12,
+                    }}>
+                    Workshop Profile
+                  </button>
+                ) : (
+                  "Workshop Profile"
+                )}{" "}
+                → Location.
+              </span>
+            </p>
+          ) : (
+            <p style={{ fontSize: 13, color: C.gold, lineHeight: 1.5 }}>
+              City and state are not set on your profile.{" "}
+              {typeof onOpenWorkshopProfile === "function" && (
+                <button type="button" onClick={() => { onClose(); onOpenWorkshopProfile(); }}
+                  style={{
+                    background: "none", border: "none", padding: 0, color: C.green,
+                    fontWeight: 700, cursor: "pointer", textDecoration: "underline", fontSize: 13,
+                  }}>
+                  Open Workshop Profile
+                </button>
+              )}{" "}
+              and save your workshop location first.
+            </p>
+          )}
         </div>
 
         {/* Reason (only if variant) */}

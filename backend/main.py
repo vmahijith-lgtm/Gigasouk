@@ -5,6 +5,22 @@
 # To add a new feature: import its router and add one line below.
 # ════════════════════════════════════════════════════════════════
 
+import warnings
+
+# razorpay~=1.4.x imports setuptools.pkg_resources, which emits UserWarning on setuptools≥81.
+# Must run before any import that loads razorpay (services.razorpay_service).
+warnings.filterwarnings(
+    "ignore",
+    message=r"^pkg_resources is deprecated as an API\.",
+    category=UserWarning,
+)
+# supabase 2.7 still pulls `gotrue`; upstream recommends supabase_auth (not yet default).
+warnings.filterwarnings(
+    "ignore",
+    message=r"The `gotrue` package is deprecated",
+    category=DeprecationWarning,
+)
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
@@ -15,6 +31,7 @@ from config import APP_URL, ALLOWED_ORIGINS
 # ── Feature routers (all served under /api/v1) ───────────────────
 from routers.gigasouk_engine   import router as engine_router
 from routers.commitment_router import router as commitment_router
+from routers.design_router     import router as design_router
 from routers.chat_router       import router as chat_router
 from routers.qc_router         import router as qc_router
 
@@ -85,6 +102,7 @@ app.add_middleware(
 # ── /api/v1 — Feature Routers ────────────────────────────────────
 app.include_router(engine_router,     prefix="/api/v1", tags=["Routing & Orders"])
 app.include_router(commitment_router, prefix="/api/v1", tags=["Commitment Pipeline"])
+app.include_router(design_router,     prefix="/api/v1", tags=["Designs"])
 app.include_router(chat_router,       prefix="/api/v1", tags=["Chat & Messaging"])
 app.include_router(qc_router,         prefix="/api/v1", tags=["Quality Control"])
 app.include_router(broadcast_router,  prefix="/api/v1", tags=["Emergency Broadcast"])

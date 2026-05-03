@@ -13,6 +13,7 @@ export type FormState = {
     shopName?: string;
     city?: string;
     state?: string;
+    pincode?: string;
 };
 
 export function buildProfilePayload(formState: FormState) {
@@ -24,6 +25,7 @@ export function buildProfilePayload(formState: FormState) {
         shop_name: formState.shopName,
         city: formState.city,
         state: formState.state,
+        pincode: formState.pincode,
     };
 }
 

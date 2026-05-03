@@ -7,7 +7,8 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../lib/auth-context";
-import { supabase } from "../lib/supabase";
+import { getCatalogDesigns } from "../lib/api";
+import type { DeliveryAddress } from "../components/MapComponents";
 
 // Lazy-load the map (heavy Google Maps SDK)
 const FactoryFinderMap = lazy(() => import("../components/FactoryFinderMap"));
@@ -26,7 +27,23 @@ const padX = "clamp(16px, 5vw, 32px)";
 interface Design {
   id: string; title: string; base_price: number;
   category?: string; preview_image_url?: string;
+  status?: string;
+  active_commit_count?: number;
   profiles?: { full_name: string };
+}
+
+function preferredToInitialAddress(
+  pd: { line1?: string; city?: string; state?: string; pincode?: string; lat?: number; lng?: number } | null | undefined
+): DeliveryAddress | null {
+  if (!pd || typeof pd.lat !== "number" || typeof pd.lng !== "number") return null;
+  return {
+    line1: pd.line1 ?? "",
+    city: pd.city ?? "",
+    state: pd.state ?? "",
+    pincode: pd.pincode ?? "",
+    lat: pd.lat,
+    lng: pd.lng,
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════ */
@@ -50,13 +67,17 @@ export default function HomePage() {
     if (user?.role === "admin")        router.replace("/admin");
   }, [user, loading, router]);
 
-  /* Fetch live designs */
+  /* Catalog: live OR at least one committed factory (backend rules) */
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from("designs").select("*, profiles(full_name)")
-        .eq("status","live").order("published_at",{ascending:false});
-      setDesigns((data as Design[]) || []);
-      setFetching(false);
+      try {
+        const { data } = await getCatalogDesigns();
+        setDesigns((data as Design[]) || []);
+      } catch {
+        setDesigns([]);
+      } finally {
+        setFetching(false);
+      }
     })();
   }, []);
 
@@ -92,11 +113,11 @@ export default function HomePage() {
             razorpay_signature:r.razorpay_signature,
           });
           setSelected(null);
-          setOrderMsg(`✓ Order ${od.order_ref} placed! Factory in ${factory.region_city} (${od.distance_km}km away)`);
+          setOrderMsg(`✓ Order ${od.order_ref} placed! Factory in ${factory.city} (${od.distance_km}km away)`);
         },
         theme:{ color:T.green },
       };
-      (window as any).Razorpay(opts).open();
+      new (window as any).Razorpay(opts).open();
     } catch(e:any) {
       setOrderMsg(e?.response?.data?.detail || "Order failed. Try again.");
     } finally {
@@ -149,6 +170,9 @@ export default function HomePage() {
           ) : user ? (
             <>
               <span style={{fontSize:13,color:T.t2}}>{user.fullName}</span>
+              {user.role === "customer" && (
+                <NavBtn href="/customer" label="My dashboard" ghost />
+              )}
               <NavBtn href="/auth/login" label="Sign Out" ghost />
             </>
           ) : (
@@ -242,7 +266,7 @@ export default function HomePage() {
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16}}>
             {[
               {n:"01",icon:"✏️",title:"Designer uploads",body:"A designer uploads a CAD file and sets a royalty price."},
-              {n:"02",icon:"🏭",title:"Factories commit",body:"Nearby MSME factories commit to manufacture it. Minimum 2 needed."},
+              {n:"02",icon:"🏭",title:"Factories commit",body:"Nearby MSME factories commit to manufacture it. One commitment unlocks publishing."},
               {n:"03",icon:"🗺️",title:"Pick your factory",body:"The product goes live. Enter your pincode and choose a factory on the map."},
               {n:"04",icon:"🤖",title:"AI quality check",body:"Factory uploads 5 photos. OpenCV verifies dimensions to ±0.5mm."},
               {n:"05",icon:"🚚",title:"Ships to you",body:"Pass QC → auto-ship via Shiprocket. Track in real-time."},
@@ -266,7 +290,7 @@ export default function HomePage() {
       <section ref={catalogRef} style={{padding:`0 ${padX} 80px`}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <p style={{fontSize:11,fontWeight:700,color:T.green,letterSpacing:".12em",
-            textTransform:"uppercase",textAlign:"center",marginBottom:10}}>Live Products</p>
+            textTransform:"uppercase",textAlign:"center",marginBottom:10}}>Catalog</p>
           <h2 style={{fontSize:30,fontWeight:800,textAlign:"center",marginBottom:32,
             letterSpacing:"-0.5px"}}>Shop the catalog</h2>
 
@@ -304,7 +328,7 @@ export default function HomePage() {
           {!fetching && filtered.length===0 && (
             <div style={{textAlign:"center",padding:60,color:T.t3}}>
               <p style={{fontSize:32,marginBottom:12}}>⚙️</p>
-              <p style={{fontSize:15}}>No live products yet. Check back soon.</p>
+              <p style={{fontSize:15}}>No products available yet. Listings appear when a design is live or at least one factory has committed.</p>
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:20}}>
@@ -329,10 +353,10 @@ export default function HomePage() {
                     <p style={{fontSize:22,fontWeight:900,color:T.green}}>
                       ₹{Number(d.base_price).toLocaleString("en-IN")}
                     </p>
-                    <span style={{fontSize:11,color:T.green,display:"flex",gap:5,alignItems:"center"}}>
-                      <span style={{width:6,height:6,borderRadius:"50%",background:T.green,
-                        display:"inline-block",animation:"pulse 2s ease infinite"}}/>
-                      Live
+                    <span style={{fontSize:11,color:d.status==="live"?T.green:T.gold,display:"flex",gap:5,alignItems:"center"}}>
+                      <span style={{width:6,height:6,borderRadius:"50%",background:d.status==="live"?T.green:T.gold,
+                        display:"inline-block",animation:d.status==="live"?"pulse 2s ease infinite":"none"}}/>
+                      {d.status === "live" ? "Live" : "Available"}
                     </span>
                   </div>
                   <p style={{fontSize:11,color:T.t3,marginTop:6}}>
@@ -441,6 +465,7 @@ export default function HomePage() {
                   designTitle={selected.title}
                   onSelect={(factory: any, address: any) => handleOrder(factory, address)}
                   onCancel={() => setSelected(null)}
+                  initialAddress={preferredToInitialAddress(user.preferredDelivery)}
                 />
               </Suspense>
             )}

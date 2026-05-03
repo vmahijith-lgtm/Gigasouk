@@ -112,12 +112,22 @@ CREATE POLICY "designs_read_live"
     USING (
         status = 'live'
         OR designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        OR id IN (
+            SELECT mc.design_id
+            FROM manufacturer_commitments mc
+            INNER JOIN manufacturers m ON m.id = mc.manufacturer_id
+            INNER JOIN profiles p ON p.id = m.profile_id
+            WHERE p.auth_id = auth.uid()
+        )
     );
 
 DROP POLICY IF EXISTS "designs_edit_own" ON designs;
 CREATE POLICY "designs_edit_own"
     ON designs FOR ALL
     USING (
+        designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    )
+    WITH CHECK (
         designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
     );
 
@@ -221,9 +231,31 @@ CREATE POLICY "variants_read_own"
         )
     );
 
+-- 4j. qc_records — profile_id must resolve via profiles.auth_id (not raw auth.uid())
+DROP POLICY IF EXISTS "qc_read_manufacturer"   ON qc_records;
+DROP POLICY IF EXISTS "qc_insert_manufacturer" ON qc_records;
+CREATE POLICY "qc_read_manufacturer"
+    ON qc_records FOR SELECT
+    USING (
+        manufacturer_id IN (
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        )
+    );
+CREATE POLICY "qc_insert_manufacturer"
+    ON qc_records FOR INSERT
+    WITH CHECK (
+        manufacturer_id IN (
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        )
+    );
+
 
 -- ════════════════════════════════════════════════════════════════
--- DONE.
+-- DONE (database tables).
+--   • Next: run migrations/storage_rls.sql once buckets cad-files and
+--     design-previews exist (locks Storage uploads to auth.uid() folders).
 --   • Re-running this script is safe (every CREATE is preceded by DROP IF EXISTS).
 --   • To verify, in the Supabase Table Editor select the "manufacturers"
 --     table → Policies tab; you should see the two new self-only

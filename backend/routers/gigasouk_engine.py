@@ -13,11 +13,12 @@ from pydantic import BaseModel
 from db import db_admin, get_one, safe_update
 from config import (
     ROUTING_WEIGHT_DISTANCE, ROUTING_WEIGHT_RATING, ROUTING_WEIGHT_QUEUE,
-    ROUTING_MAX_DISTANCE_KM, MIN_COMMITS_TO_GO_LIVE,
+    ROUTING_MAX_DISTANCE_KM,
     NEGOTIATION_TIMEOUT_HOURS, MAX_BID_ROUNDS,
     ORDER_STATUS_ROUTING, ORDER_STATUS_NEGOTIATING,
     ORDER_STATUS_CONFIRMED, ORDER_STATUS_CUTTING,
-    ORDER_STATUS_CANCELLED, DESIGN_STATUS_LIVE,
+    ORDER_STATUS_CANCELLED,
+    DESIGN_STATUS_LIVE, DESIGN_STATUS_DRAFT, DESIGN_STATUS_PAUSED,
     GOOGLE_MAPS_API_KEY,
 )
 from services.notify_service import (
@@ -144,7 +145,8 @@ def get_committed_pool(design_id: str, customer_lat: float, customer_lng: float)
         c["score"] = score_factory(dist, mfr.get("rating", 3.0), mfr.get("queue_depth", 0))
         scored.append(c)
 
-    return sorted(scored, key=lambda x: x["score"])
+    # Shortest distance first; composite score breaks ties only.
+    return sorted(scored, key=lambda x: (x["distance_km"], x["score"]))
 
 
 # ════════════════════════════════════════════════════════════════
@@ -212,6 +214,57 @@ async def available_factories(
 
 
 # ════════════════════════════════════════════════════════════════
+# ENDPOINT: PUBLIC SHOP CATALOG (service role — bypasses RLS)
+# GET /api/v1/catalog/designs
+# Designs visible when live OR at least one active commitment exists.
+# ════════════════════════════════════════════════════════════════
+
+@router.get("/catalog/designs")
+def catalog_designs():
+    """
+    Products browseable by customers (homepage / dashboards).
+    Includes live listings and designs that already have supply (≥1 commit)
+    even before the designer publishes to “live”.
+    """
+    try:
+        res = (
+            db_admin.table("designs")
+            .select("*, profiles(full_name)")
+            .or_("status.eq.live,active_commit_count.gte.1")
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except Exception:
+        # Fallback if OR filter unsupported: fetch live + high-commit separately
+        a = db_admin.table("designs").select("*, profiles(full_name)").eq("status", "live").execute().data or []
+        b = (
+            db_admin.table("designs")
+            .select("*, profiles(full_name)")
+            .gte("active_commit_count", 1)
+            .execute()
+            .data
+        ) or []
+        seen = set()
+        merged = []
+        for row in a + b:
+            if row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            merged.append(row)
+        merged.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+        rows = merged
+    else:
+        rows = res.data or []
+
+    out = []
+    for d in rows:
+        if d.get("status") in (DESIGN_STATUS_DRAFT, DESIGN_STATUS_PAUSED):
+            continue
+        out.append(d)
+    return out
+
+
+# ════════════════════════════════════════════════════════════════
 # ENDPOINT: PLACE ORDER
 # POST /api/v1/orders
 # ════════════════════════════════════════════════════════════════
@@ -219,18 +272,16 @@ async def available_factories(
 @router.post("/orders")
 async def place_order(req: PlaceOrderRequest, bg: BackgroundTasks):
     """
-    Customer places an order for a live design.
-    1. Validates design is live (committed supply exists)
-    2. Finds best committed factory near customer
-    3. Creates order + negotiation room
-    4. Sends notifications
+    Customer places an order when at least one manufacturer has committed.
+    Routes to the committed manufacturer nearest to the delivery coordinates
+    (shortest distance); honours commitment_id when the customer picked one on the map.
     """
 
-    # ── Validate design is live ──────────────────────────────────
+    # ── Validate design ─────────────────────────────────────────
     design = get_one("designs", {"id": req.design_id})
     if not design:
         raise HTTPException(404, "Design not found")
-    if design["status"] != DESIGN_STATUS_LIVE:
+    if design["status"] in (DESIGN_STATUS_DRAFT, DESIGN_STATUS_PAUSED):
         raise HTTPException(400, "Design is not available for ordering yet")
 
     # ── Find best factory from committed pool ────────────────────
@@ -258,7 +309,7 @@ async def place_order(req: PlaceOrderRequest, bg: BackgroundTasks):
             raise HTTPException(400, "Chosen factory is no longer available. Please select another.")
         best = chosen
     else:
-        best = pool[0]   # AI recommendation
+        best = pool[0]   # nearest committed factory (shortest distance_km)
 
     manufacturer_id = best["manufacturer_id"]
 

@@ -322,8 +322,10 @@ export function TrackingMap({
 export function ManufacturerOrderMap({
   manufacturerLat, manufacturerLng,
   orders,
+  mapHeight = 440,
 }: {
   manufacturerLat: number; manufacturerLng: number;
+  mapHeight?: number;
   orders: Array<{
     order_ref: string;
     status:    string;
@@ -396,7 +398,7 @@ export function ManufacturerOrderMap({
     if (orders.length > 0) {
       map.fitBounds(bounds, { top: 60, bottom: 40, left: 40, right: 40 });
     }
-  }, [manufacturerLat, manufacturerLng, orders]);
+  }, [manufacturerLat, manufacturerLng, orders, mapHeight]);
 
   return (
     <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #1A2230" }}>
@@ -407,7 +409,7 @@ export function ManufacturerOrderMap({
         <span style={{ color: "#F4F6FC", fontSize: 13, fontWeight: 600 }}>🗺️ Your Active Orders</span>
         <span style={{ color: "#5A6A80", fontSize: 12 }}>{orders.length} order{orders.length !== 1 ? "s" : ""}</span>
       </div>
-      <div ref={mapRef} style={{ width: "100%", height: 340 }} />
+      <div ref={mapRef} style={{ width: "100%", height: mapHeight, minHeight: 320 }} />
       <div style={{
         background: "#111826", padding: "10px 14px",
         display: "flex", gap: 16, fontSize: 12, color: "#5A6A80",

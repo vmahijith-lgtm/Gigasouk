@@ -29,6 +29,7 @@ const ROLE_OPTIONS: { key: Role; label: string; icon: string; desc: string }[] =
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const roleParam = searchParams.get("role");
   const [role, setRole] = useState<Role>("customer");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,6 +39,7 @@ function SignupForm() {
   const [shopName, setShopName] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [pincode, setPincode] = useState("");
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +47,12 @@ function SignupForm() {
   const [hasSession, setHasSession] = useState(false);
   // sessionToken is intentionally NOT cached — always fetched fresh on submit
   const [sessionEmail, setSessionEmail] = useState("");
+
+  useEffect(() => {
+    if (roleParam === "designer" || roleParam === "manufacturer" || roleParam === "customer") {
+      setRole(roleParam);
+    }
+  }, [roleParam]);
 
   useEffect(() => {
     let mounted = true;
@@ -71,6 +79,27 @@ function SignupForm() {
       if (!mounted) return;
 
       if (existingProfile?.role) {
+        const wantsUpgrade =
+          (roleParam === "designer" || roleParam === "manufacturer") &&
+          existingProfile.role === "customer";
+
+        if (wantsUpgrade) {
+          const metadata = session.user.user_metadata ?? {};
+          const inferredName =
+            metadata.full_name || metadata.name || metadata.user_name || "";
+          const inferredEmail = session.user.email || "";
+
+          setHasSession(true);
+          setSessionEmail(inferredEmail);
+          if (inferredName) setFullName(inferredName);
+          if (inferredEmail) setEmail(inferredEmail);
+          if (roleParam === "designer" || roleParam === "manufacturer") {
+            setRole(roleParam);
+          }
+          setSessionChecked(true);
+          return;
+        }
+
         const roleHome =
           existingProfile.role === "designer"
             ? "/designer"
@@ -99,11 +128,15 @@ function SignupForm() {
     return () => {
       mounted = false;
     };
-  }, [router]);
+  }, [router, roleParam]);
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     if (!hasSession && password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (role === "manufacturer" && (!shopName || !city || !state || !pincode)) {
+      setError("Manufacturer must provide: shop name, city, state, pincode.");
+      return;
+    }
     setLoading(true);
     setError("");
 
@@ -125,6 +158,7 @@ function SignupForm() {
           shopName,
           city,
           state,
+          pincode,
         });
         const ROLE_HOME: Record<string, string> = {
           designer: "/designer", manufacturer: "/manufacturer",
@@ -156,14 +190,14 @@ function SignupForm() {
 
     // 2. Build profile payload
     const profilePayload = buildProfilePayload({
-      fullName, email, role, phone, shopName, city, state
+      fullName, email, role, phone, shopName, city, state, pincode
     });
 
     // 3. If session exists (email confirm disabled), create profile immediately
     if (authData.session) {
       try {
         await postCreateProfile(authData.session.access_token, {
-          fullName, email, role, phone, shopName, city, state
+          fullName, email, role, phone, shopName, city, state, pincode
         });
         // Success — full page nav so middleware sees the freshly-set cookie.
         const ROLE_HOME: Record<string, string> = {
@@ -294,6 +328,7 @@ function SignupForm() {
               <Field label="Workshop / Shop Name" type="text" value={shopName} onChange={setShopName} placeholder="e.g. Sharma Fab Works" />
               <Field label="City" type="text" value={city} onChange={setCity} placeholder="e.g. Mumbai" />
               <Field label="State" type="text" value={state} onChange={setState} placeholder="e.g. Maharashtra" />
+              <Field label="Pincode" type="text" value={pincode} onChange={setPincode} placeholder="e.g. 560001" />
             </>
           )}
 
@@ -379,6 +414,8 @@ function fieldMeta(label: string, type: string): { name: string; autoComplete: s
       return { name: "city", autoComplete: "address-level2" };
     case "State":
       return { name: "state", autoComplete: "address-level1" };
+    case "Pincode":
+      return { name: "pincode", autoComplete: "postal-code" };
     default:
       return { name: label.toLowerCase().replace(/\s+/g, "_"), autoComplete: "on" };
   }

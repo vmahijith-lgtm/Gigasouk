@@ -63,7 +63,7 @@ ROUTING_WEIGHT_QUEUE    = 0.10   # 10% — less busy factory wins
 ROUTING_MAX_DISTANCE_KM = 500    # Factories beyond this are excluded
 
 # ── Commitment Pipeline ──────────────────────────────────────────
-MIN_COMMITS_TO_GO_LIVE      = 2     # Commits needed before design goes live
+MIN_COMMITS_TO_GO_LIVE      = 1     # Active commits needed before design can go live
 COMMITMENT_SEEK_HOURS       = 48    # Hours before emergency broadcast fires
 REGIONAL_VARIANT_MAX_MARKUP = 0.50  # Regional price max 50% above base
 

@@ -13,32 +13,50 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 type UserRole = "designer" | "manufacturer" | "admin" | "customer" | null;
 
 interface AuthUser {
-  authId:    string;          // Supabase auth.users.id
+  authId: string;          // Supabase auth.users.id
   profileId: string;          // profiles.id (same as auth.users.id via trigger)
-  role:      UserRole;
-  fullName:  string;
-  email:     string;
+  role: UserRole;
+  fullName: string;
+  email: string;
   manufacturerId: string | null; // set only if role === "manufacturer"
+  /** Customer saved address for routing / map prefill (from /api/auth/me) */
+  preferredDelivery: {
+    line1?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    lat?: number;
+    lng?: number;
+  } | null;
 }
 
 interface AuthCtx {
-  user:    AuthUser | null;
+  user: AuthUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthCtx>({ user: null, loading: true, signOut: async () => {} });
+const AuthContext = createContext<AuthCtx>({ user: null, loading: true, signOut: async () => { } });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user,    setUser]    = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function loadUser(authId: string, accessToken: string | null) {
+    // If the auth user was deleted, getUser will fail; clear session immediately.
+    if (accessToken) {
+      const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser(accessToken);
+      if (authErr || !authUser) {
+        await supabase.auth.signOut();
+        setUser(null);
+        return;
+      }
+    }
     // Prefer the backend /auth/me endpoint — it uses the service role and
     // returns profile + manufacturer_id / designer_id without needing
     // per-table SELECT policies on the Supabase side. This avoids the
     // "manufacturer profile being set up" loop when RLS is restrictive.
-    if (accessToken) {
+    if (accessToken && API_BASE) {
       try {
         const res = await fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -48,11 +66,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (data?.profile) {
             setUser({
               authId,
-              profileId:      data.profile.id,
-              role:           data.profile.role as UserRole,
-              fullName:       data.profile.full_name || "",
-              email:          data.profile.email    || "",
+              profileId: data.profile.id,
+              role: data.profile.role as UserRole,
+              fullName: data.profile.full_name || "",
+              email: data.profile.email || "",
               manufacturerId: data.manufacturer_id || null,
+              preferredDelivery: data.profile.preferred_delivery || null,
             });
             return;
           }
@@ -68,25 +87,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Fallback: direct Supabase query (works only if RLS allows it).
-    const { data: profile } = await supabase
+    // Avoid joins here because manufacturers/designers tables may be locked
+    // down by RLS in some projects, which would null out the entire response.
+    const { data: profile, error: profileErr } = await supabase
       .from("profiles")
-      .select("*, manufacturers(id)")
+      .select("*")
       .eq("auth_id", authId)
       .single();
 
-    if (!profile) { setUser(null); return; }
+    if (profileErr || !profile) { setUser(null); return; }
 
-    const mfrRow = Array.isArray(profile.manufacturers)
-      ? profile.manufacturers[0]
-      : profile.manufacturers;
+    let manufacturerId: string | null = null;
+    if (profile.role === "manufacturer") {
+      const { data: mfr } = await supabase
+        .from("manufacturers")
+        .select("id")
+        .eq("profile_id", profile.id)
+        .single();
+      manufacturerId = mfr?.id || null;
+    }
 
+    const pd = profile.preferred_delivery as AuthUser["preferredDelivery"];
     setUser({
       authId,
-      profileId:      profile.id,
-      role:           profile.role as UserRole,
-      fullName:       profile.full_name || "",
-      email:          profile.email    || "",
-      manufacturerId: mfrRow?.id || null,
+      profileId: profile.id,
+      role: profile.role as UserRole,
+      fullName: profile.full_name || "",
+      email: profile.email || "",
+      manufacturerId,
+      preferredDelivery: pd && typeof pd === "object" ? pd : null,
     });
   }
 

@@ -20,7 +20,7 @@
 fastapi~=0.115.0              # ASGI web framework
 uvicorn[standard]~=0.29.0    # ASGI server (includes websockets + watchfiles)
 python-multipart~=0.0.9      # Required for file/form uploads (UploadFile)
-setuptools>=65.0.0,<82.0.0    # razorpay imports pkg_resources; setuptools 82+ removed it
+setuptools>=65.0.0,<81.0.0    # razorpay imports pkg_resources; setuptools 81+ loudly deprecates it (82+ removes it)
 
 # ── Data Validation ───────────────────────────────────────────────
 pydantic~=2.7.0              # Request/response schemas (FastAPI uses this internally)

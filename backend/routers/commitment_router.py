@@ -33,6 +33,19 @@ from services.notify_service import (
 router = APIRouter()
 
 
+def _norm_tag_set(items: list | None) -> set[str]:
+    """Lowercase + strip so designer vs manufacturer tags match reliably."""
+    if not items:
+        return set()
+    return {str(x).strip().lower() for x in items if str(x).strip()}
+
+
+def _mfr_can_fulfill_design(mfr_machines: set, mfr_materials: set, design: dict) -> bool:
+    req_m = _norm_tag_set(design.get("required_machines"))
+    req_mat = _norm_tag_set(design.get("required_materials"))
+    return req_m.issubset(mfr_machines) and req_mat.issubset(mfr_materials)
+
+
 # ════════════════════════════════════════════════════════════════
 # MODELS
 # ════════════════════════════════════════════════════════════════
@@ -46,8 +59,9 @@ class CommitRequest(BaseModel):
     design_id:         str
     manufacturer_id:   str
     committed_price:   float   # Price manufacturer will honor
-    region_city:       str     # City / region this commitment covers
-    region_state:      str
+    # Optional: if empty, server uses manufacturers.city / manufacturers.state
+    region_city:       str = ""
+    region_state:      str = ""
     notes:             str = ""
 
 
@@ -116,11 +130,11 @@ async def seek_commitments(req: SeekCommitmentsRequest, bg: BackgroundTasks):
 
     # Log broadcast
     db_admin.table("commitment_broadcasts").insert({
-        "id":           str(uuid.uuid4()),
-        "design_id":    req.design_id,
-        "broadcast_at": datetime.now(timezone.utc).isoformat(),
-        "recipients":   len(capable_mfrs),
-        "type":         "initial_seek",
+        "id":             str(uuid.uuid4()),
+        "design_id":      req.design_id,
+        "broadcast_at":   datetime.now(timezone.utc).isoformat(),
+        "recipients":     len(capable_mfrs),
+        "broadcast_type": "initial_seek",
     }).execute()
 
     return {
@@ -164,6 +178,19 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
     if existing:
         raise HTTPException(409, "You have already committed to this design")
 
+    mfr_row = get_one("manufacturers", {"id": req.manufacturer_id})
+    if not mfr_row:
+        raise HTTPException(404, "Manufacturer not found")
+
+    city = (req.region_city or "").strip() or (mfr_row.get("city") or "").strip()
+    state = (req.region_state or "").strip() or (mfr_row.get("state") or "").strip()
+    if not city or not state:
+        raise HTTPException(
+            400,
+            "Workshop location incomplete. Set city and state in your manufacturer profile "
+            "(Workshop Profile → location) before committing.",
+        )
+
     # Validate regional markup limit
     base = design["base_price"]
     if req.committed_price > base * (1 + REGIONAL_VARIANT_MAX_MARKUP):
@@ -182,8 +209,8 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
         "manufacturer_id": req.manufacturer_id,
         "committed_price": req.committed_price,
         "base_price":      base,
-        "region_city":     req.region_city,
-        "region_state":    req.region_state,
+        "region_city":     city,
+        "region_state":    state,
         "status":          "pending_approval" if needs_approval else "active",
         "notes":           req.notes,
         "committed_at":    datetime.now(timezone.utc).isoformat(),
@@ -199,8 +226,8 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
             "manufacturer_id": req.manufacturer_id,
             "proposed_price":  req.committed_price,
             "base_price":      base,
-            "region_city":     req.region_city,
-            "region_state":    req.region_state,
+            "region_city":     city,
+            "region_state":    state,
             "status":          "pending",
             "submitted_at":    datetime.now(timezone.utc).isoformat(),
         }).execute()
@@ -209,7 +236,7 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
             notify_manufacturer_regional_variant_needed,
             design["designer_id"],
             design["title"],
-            req.region_city,
+            city,
             req.committed_price,
             variant_id,
         )
@@ -225,7 +252,7 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
         notify_designer_commitment_received,
         design["designer_id"],
         design["title"],
-        req.region_city,
+        city,
         req.committed_price,
     )
 
@@ -325,18 +352,42 @@ def get_available_designs(manufacturer_id: str):
         .data
     }
 
-    # Filter: exclude already committed, match machine types
-    mfr_machines   = set(manufacturer.get("machine_types", []))
-    mfr_materials  = set(manufacturer.get("materials", []))
+    # Filter: exclude already committed, match machine types / materials (normalized)
+    mfr_machines   = _norm_tag_set(manufacturer.get("machine_types"))
+    mfr_materials  = _norm_tag_set(manufacturer.get("materials"))
     available = []
 
     for d in designs:
         if d["id"] in my_commits:
             continue
-        req_machines  = set(d.get("required_machines", []))
-        req_materials = set(d.get("required_materials", []))
-        if req_machines.issubset(mfr_machines) and req_materials.issubset(mfr_materials):
+        if _mfr_can_fulfill_design(mfr_machines, mfr_materials, d):
             available.append(d)
+
+    # Enrich for manufacturer UI: designer display name + seeking duration
+    designer_ids = list({row["designer_id"] for row in available})
+    names: dict[str, str] = {}
+    if designer_ids:
+        prow = (
+            db_admin.table("profiles")
+            .select("id, full_name")
+            .in_("id", designer_ids)
+            .execute()
+            .data
+        )
+        names = {r["id"]: r.get("full_name") or "" for r in (prow or [])}
+
+    now = datetime.now(timezone.utc)
+    for row in available:
+        row["designer_name"] = names.get(row["designer_id"], "")
+        seeking_at = row.get("seeking_at")
+        if seeking_at:
+            try:
+                ts = datetime.fromisoformat(seeking_at.replace("Z", "+00:00"))
+                row["days_seeking"] = max(0, (now - ts).days)
+            except Exception:
+                row["days_seeking"] = 0
+        else:
+            row["days_seeking"] = 0
 
     return available
 
@@ -479,13 +530,11 @@ def _find_capable_manufacturers(design: dict) -> list[dict]:
     commit invites.
     """
     all_mfrs = db_admin.table("manufacturers").select("*").eq("is_active", True).execute().data
-    req_machines  = set(design.get("required_machines",  []))
-    req_materials = set(design.get("required_materials", []))
 
     capable = []
     for m in all_mfrs:
-        mfr_machines  = set(m.get("machine_types", []))
-        mfr_materials = set(m.get("materials",     []))
-        if req_machines.issubset(mfr_machines) and req_materials.issubset(mfr_materials):
+        mfr_machines = _norm_tag_set(m.get("machine_types"))
+        mfr_materials = _norm_tag_set(m.get("materials"))
+        if _mfr_can_fulfill_design(mfr_machines, mfr_materials, design):
             capable.append(m)
     return capable

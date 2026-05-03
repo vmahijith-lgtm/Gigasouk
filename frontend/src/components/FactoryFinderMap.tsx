@@ -19,6 +19,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { AddressAutocomplete, type DeliveryAddress } from "./MapComponents";
 
+export type { DeliveryAddress };
+
 const C = {
   bg:"#060810", card:"#0C1018", card2:"#111826", border:"#1A2230",
   green:"#00E5A0", gold:"#F5A623", blue:"#4A9EFF", purple:"#A78BFA",
@@ -44,16 +46,19 @@ interface Props {
   designTitle:string;
   onSelect:   (factory: FactoryOption, address: DeliveryAddress) => void;
   onCancel:   () => void;
+  /** Prefill delivery & load factories (e.g. saved customer preferred location). */
+  initialAddress?: DeliveryAddress | null;
 }
 
 // Score bar width: score is 0–1 (lower = better), so invert for display
 const scoreBar = (score: number) => `${Math.round((1 - score) * 100)}%`;
 
-export default function FactoryFinderMap({ designId, designTitle, onSelect, onCancel }: Props) {
+export default function FactoryFinderMap({ designId, designTitle, onSelect, onCancel, initialAddress }: Props) {
   const mapRef    = useRef<HTMLDivElement>(null);
   const mapObj    = useRef<any>(null);
   const markers   = useRef<any[]>([]);
   const infoWins  = useRef<any[]>([]);
+  const booted    = useRef(false);
 
   const [step,       setStep]       = useState<"address"|"loading"|"results"|"selected">("address");
   const [address,    setAddress]    = useState<DeliveryAddress | null>(null);
@@ -85,7 +90,7 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
         return;
       }
       setFactories(data);
-      setSelected(data[0]);   // AI recommendation = lowest score
+      setSelected(data[0]);   // nearest factory (shortest distance_km)
       setStep("results");
     } catch (e: any) {
       setError(e.message || "Could not load factories. Please try again.");
@@ -124,6 +129,14 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
       { timeout: 8000 }
     );
   }, [fetchFactories]);
+
+  // ── Prefill from saved preferred location (once) ──────────────
+  useEffect(() => {
+    if (booted.current || !initialAddress?.lat || !initialAddress?.lng) return;
+    booted.current = true;
+    setAddress(initialAddress);
+    fetchFactories(initialAddress);
+  }, [initialAddress, fetchFactories]);
 
   // ── Draw factory pins on map ──────────────────────────────────
   useEffect(() => {
@@ -167,9 +180,9 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
 
     // Factory pins — city centroid (privacy-safe)
     factories.forEach((f, i) => {
-      const isAI  = i === 0;
+      const isNearest = i === 0;
       const isSel = selected?.commitment_id === f.commitment_id;
-      const color = isAI ? "#00E5A0" : isSel ? "#F5A623" : "#A78BFA";
+      const color = isNearest ? "#00E5A0" : isSel ? "#F5A623" : "#A78BFA";
       const scale = isSel ? 14 : 10;
 
       const marker = new M.Marker({
@@ -187,7 +200,7 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
       const iw = new M.InfoWindow({
         content: `
           <div style="font-family:Inter,sans-serif;padding:6px 2px;min-width:160px">
-            ${isAI ? '<div style="color:#059669;font-size:10px;font-weight:700;margin-bottom:4px">⭐ AI RECOMMENDED</div>' : ""}
+            ${isNearest ? '<div style="color:#059669;font-size:10px;font-weight:700;margin-bottom:4px">⭐ NEAREST</div>' : ""}
             <div style="font-weight:700;font-size:13px;color:#111;margin-bottom:4px">${f.city}, ${f.state}</div>
             <div style="font-size:11px;color:#555;display:grid;grid-template-columns:1fr 1fr;gap:4px">
               <span>📏 ${f.distance_km}km</span>
@@ -276,7 +289,7 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
         <div style={{ padding:"40px 20px", textAlign:"center" }}>
           <div style={{ fontSize:36, marginBottom:12 }}>🗺️</div>
           <p style={{ color:C.t2, fontSize:14 }}>Finding factories near {address?.city}…</p>
-          <p style={{ color:C.t3, fontSize:11 }}>Scoring by distance, rating & availability</p>
+          <p style={{ color:C.t3, fontSize:11 }}>Ranking factories by shortest distance to you</p>
         </div>
       )}
 
@@ -289,7 +302,7 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
           {/* Legend */}
           <div style={{ background:C.card2, padding:"8px 16px", display:"flex", gap:16, fontSize:11, color:C.t3 }}>
             <span>🔵 You</span>
-            <span>🟢 AI pick</span>
+            <span>🟢 Nearest</span>
             <span>🟡 Selected</span>
             <span>🟣 Other factories</span>
           </div>
@@ -301,7 +314,7 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
             </p>
             {factories.map((f, i) => {
               const isSel = selected?.commitment_id === f.commitment_id;
-              const isAI  = i === 0;
+              const isNearest = i === 0;
               return (
                 <div key={f.commitment_id}
                   onClick={() => setSelected(f)}
@@ -314,10 +327,10 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
                     <div>
                       <span style={{ color:C.t1, fontWeight:700, fontSize:13 }}>{f.city}, {f.state}</span>
-                      {isAI && (
+                      {isNearest && (
                         <span style={{ marginLeft:8, fontSize:10, padding:"2px 7px", borderRadius:20,
                           background:`${C.green}20`, color:C.green, fontWeight:700 }}>
-                          ⭐ AI Pick
+                          ⭐ Nearest
                         </span>
                       )}
                     </div>
