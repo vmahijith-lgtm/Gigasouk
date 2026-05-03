@@ -99,7 +99,9 @@ export const refundPayment = (data: { order_id: string; reason?: string }) =>
   api.post("/api/v1/payments/refund", data);
 
 // ── QC ────────────────────────────────────────────────────────────
-export const submitQC       = (data: object)            => api.post("/api/v1/qc/submit", data);
+/** Manufacturer JWT required; do not send manufacturer_id (server resolves from token). */
+export const submitQC       = (data: { order_id: string; photo_urls: string[]; notes?: string }) =>
+  api.post("/api/v1/qc/submit", data);
 export const manualQCReview = (data: object)            => api.post("/api/v1/qc/manual-review", data);
 export const getQCHistory   = (orderId: string)         => api.get(`/api/v1/qc/${orderId}`);
 

@@ -116,11 +116,49 @@ CREATE POLICY "gigasouk_product_images_delete_own"
         AND split_part(name, '/', 1) = auth.uid()::text
     );
 
+-- ── qc-photos (private — manufacturer QC part photos) ─────────────
+-- Bucket `qc-photos` in Dashboard (private). Paths:
+--   {auth.uid()}/qc/{order_id}/{filename}
+-- Backend QC downloads images via signed URLs passed from the client.
+
+DROP POLICY IF EXISTS "gigasouk_qc_photos_insert_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_qc_photos_select_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_qc_photos_update_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_qc_photos_delete_own" ON storage.objects;
+
+CREATE POLICY "gigasouk_qc_photos_insert_own"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_qc_photos_select_own"
+    ON storage.objects FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_qc_photos_update_own"
+    ON storage.objects FOR UPDATE TO authenticated
+    USING (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_qc_photos_delete_own"
+    ON storage.objects FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
 -- ════════════════════════════════════════════════════════════════
 -- Notes:
 -- • Backend signed URLs for CAD use the service role → bypasses RLS.
 -- • Product gallery / showcase images are read via backend-signed URLs for
 --   customers and other parties (same pattern as CAD).
--- • If uploads still fail, confirm bucket ids exactly match 'cad-files'
---   and 'design-previews' (Supabase is case-sensitive).
+-- • If uploads still fail, confirm bucket ids exactly match 'cad-files',
+--   'design-previews', 'product-images', 'qc-photos' (Supabase is case-sensitive).
 -- ════════════════════════════════════════════════════════════════

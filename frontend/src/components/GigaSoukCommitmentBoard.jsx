@@ -10,6 +10,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { getAvailableDesigns, createCommitment } from "../lib/api";
+import DesignMediaGallery from "./DesignMediaGallery";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -412,16 +413,9 @@ function CommitPanel({ design, commitPrice, setCommitPrice, workshopCity, worksh
           </div>
         )}
 
-        {design.preview_image_url && (
-          <div style={{
-            marginBottom: 20, borderRadius: 10, overflow: "hidden",
-            border: `1px solid ${C.border}`, background: C.card2,
-          }}>
-            <img
-              src={design.preview_image_url}
-              alt="Design preview"
-              style={{ width: "100%", maxHeight: 280, objectFit: "contain", display: "block" }}
-            />
+        {design.id && (
+          <div style={{ marginBottom: 20 }}>
+            <DesignMediaGallery designId={design.id} title={design.title} storefront />
           </div>
         )}
 

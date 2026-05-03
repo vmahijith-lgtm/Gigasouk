@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
+import { shortDesignChatLabel } from "../lib/negotiationLabels";
 import GigaSoukNegotiationRoom from "./GigaSoukNegotiationRoom";
 
 const C = {
@@ -46,6 +47,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
     setError("");
 
     try {
+      // `orders!order_id` — disambiguate: negotiation_rooms↔orders has two FKs (order_id + orders.negotiation_room_id).
       let q = supabase
         .from("negotiation_rooms")
         .select(
@@ -59,9 +61,10 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           order_id,
           designer_id,
           manufacturer_id,
-          orders (
+          orders!order_id (
             order_ref,
-            designs ( title )
+            design_id,
+            created_at
           )
         `
         )
@@ -73,7 +76,24 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
       const { data: rows, error: qErr } = await q;
       if (qErr) throw qErr;
 
-      const list = rows || [];
+      const list = [...(rows || [])];
+      const designIds = [...new Set(list.map((r) => r.orders?.design_id).filter(Boolean))];
+      let byDesignId = {};
+      if (designIds.length) {
+        const { data: drows } = await supabase
+          .from("designs")
+          .select("id, title, description, preview_image_url")
+          .in("id", designIds);
+        byDesignId = Object.fromEntries((drows || []).map((d) => [d.id, d]));
+      }
+
+      list.sort((a, b) => {
+        const ta = new Date(a.orders?.created_at || a.created_at || 0).getTime();
+        const tb = new Date(b.orders?.created_at || b.created_at || 0).getTime();
+        if (tb !== ta) return tb - ta;
+        return String(b.id).localeCompare(String(a.id));
+      });
+
       const mIds = [...new Set(list.map((r) => r.manufacturer_id).filter(Boolean))];
       const pIds = [...new Set(list.map((r) => r.designer_id).filter(Boolean))];
 
@@ -90,19 +110,28 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
       const byProf = Object.fromEntries((profRes.data || []).map((p) => [p.id, p]));
 
       setRooms(
-        list.map((r) => ({
-          ...r,
-          _counterparty:
-            role === "designer"
-              ? byMfr[r.manufacturer_id]
-              : byProf[r.designer_id],
-          _designerName: byProf[r.designer_id]?.full_name,
-          _orderRef: r.orders?.order_ref,
-          _designTitle: r.orders?.designs?.title,
-        }))
+        list.map((r) => {
+          const did = r.orders?.design_id;
+          const design = did ? byDesignId[did] : null;
+          return {
+            ...r,
+            _counterparty:
+              role === "designer"
+                ? byMfr[r.manufacturer_id]
+                : byProf[r.designer_id],
+            _designerName: byProf[r.designer_id]?.full_name,
+            _orderRef: r.orders?.order_ref,
+            _designTitle: design?.title,
+            _designSummary: design ? shortDesignChatLabel(design) : undefined,
+            _previewImageUrl: design?.preview_image_url || null,
+          };
+        })
       );
-    } catch {
-      setError("Could not load negotiation rooms.");
+    } catch (e) {
+      const msg = e && typeof e === "object" && "message" in e ? String(e.message) : "";
+      setError(
+        msg ? `Could not load negotiation rooms (${msg})` : "Could not load negotiation rooms.",
+      );
       setRooms([]);
     } finally {
       setLoading(false);
@@ -174,8 +203,8 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           No negotiations yet
         </p>
         <p style={{ fontSize: 13, lineHeight: 1.6 }}>
-          When a customer places an order that routes to you and the designer, a private chat opens here for price
-          discussion until the deal is locked.
+          After you commit to a design, a conversation appears here once a customer places an order that routes to your
+          workshop. List order shows the newest order first; each row uses the design description and listing photo.
         </p>
       </div>
     );
@@ -237,6 +266,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           {rooms.map((room) => {
             const st = STATUS_STYLE[room.status] || STATUS_STYLE.open;
             const active = room.id === selectedId;
+            const chatTitle = room._designSummary || room._designTitle || "Conversation";
             return (
               <button
                 key={room.id}
@@ -244,7 +274,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
                 onClick={() => setSelectedId(room.id)}
                 style={{
                   textAlign: "left",
-                  padding: "14px 16px",
+                  padding: "12px 14px",
                   border: "none",
                   borderBottom: `1px solid ${C.border}`,
                   background: active ? C.card : "transparent",
@@ -252,47 +282,85 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
                   borderLeft: active ? `3px solid ${C.green}` : "3px solid transparent",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <span
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <div
                     style={{
-                      fontSize: 10,
-                      fontWeight: 800,
-                      padding: "2px 8px",
-                      borderRadius: 8,
-                      background: st.bg,
-                      border: `1px solid ${st.border}55`,
-                      color: st.border,
+                      width: 48,
+                      height: 48,
+                      flexShrink: 0,
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      border: `1px solid ${C.border}`,
+                      background: "#060910",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
-                    {st.label}
-                  </span>
+                    {room._previewImageUrl ? (
+                      <img
+                        src={room._previewImageUrl}
+                        alt=""
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 18, opacity: 0.35 }}>◆</span>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          padding: "2px 8px",
+                          borderRadius: 8,
+                          background: st.bg,
+                          border: `1px solid ${st.border}55`,
+                          color: st.border,
+                        }}
+                      >
+                        {st.label}
+                      </span>
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: C.t1,
+                        marginBottom: 4,
+                        lineHeight: 1.35,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                      title={chatTitle}
+                    >
+                      {chatTitle}
+                    </p>
+                    {room._designTitle && room._designSummary && room._designTitle !== chatTitle && (
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: C.blue,
+                          marginBottom: 4,
+                          fontWeight: 600,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                        title={room._designTitle}
+                      >
+                        {room._designTitle}
+                      </p>
+                    )}
+                    <p style={{ fontSize: 12, color: C.t2, marginBottom: 2 }}>{counterpartyLabel(room)}</p>
+                    {room._orderRef && (
+                      <p style={{ fontSize: 11, color: C.t3 }}>Order {room._orderRef}</p>
+                    )}
+                  </div>
                 </div>
-                <p
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: C.t1,
-                    marginBottom: 4,
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {counterpartyLabel(room)}
-                </p>
-                {room._designTitle && (
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: C.blue,
-                      marginBottom: 4,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {room._designTitle}
-                  </p>
-                )}
-                {room._orderRef && (
-                  <p style={{ fontSize: 11, color: C.t3 }}>Order {room._orderRef}</p>
-                )}
               </button>
             );
           })}

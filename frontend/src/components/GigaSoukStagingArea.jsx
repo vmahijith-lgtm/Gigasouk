@@ -17,7 +17,7 @@
 //   • Pause / Resume    (live ↔ paused)
 // ════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import {
   seekCommitments,
@@ -430,7 +430,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                         </p>
                       )}
                       <div style={{ marginTop: 12 }}>
-                        <DesignMediaGallery designId={design.id} title={design.title} />
+                        <DesignMediaGallery designId={design.id} title={design.title} storefront />
                       </div>
                     </div>
                   </div>
@@ -582,6 +582,17 @@ function NewDesignModal({ designerId, onCreated, onClose }) {
 
   const cadRef     = useRef();
   const previewRef = useRef();
+
+  const previewObjectUrl = useMemo(() => {
+    if (!previewFile) return null;
+    return URL.createObjectURL(previewFile);
+  }, [previewFile]);
+
+  useEffect(() => {
+    return () => {
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    };
+  }, [previewObjectUrl]);
 
   function set(field) { return e => setForm(f => ({ ...f, [field]: e.target.value })); }
 
@@ -840,15 +851,40 @@ function NewDesignModal({ designerId, onCreated, onClose }) {
               onClick={() => previewRef.current?.click()}
               style={{
                 border: `2px dashed ${previewFile ? C.purple : C.border}`,
-                borderRadius: 10, padding: "16px", cursor: "pointer",
+                borderRadius: 12, padding: previewObjectUrl ? 12 : "16px", cursor: "pointer",
                 textAlign: "center", background: C.card2,
-                transition: "border-color .2s"
+                transition: "border-color .2s",
+                overflow: "hidden",
               }}
             >
-              {previewFile ? (
-                <p style={{ fontSize: 13, fontWeight: 700, color: C.purple }}>🖼 {previewFile.name}</p>
+              {previewObjectUrl ? (
+                <div>
+                  <img
+                    src={previewObjectUrl}
+                    alt="Listing preview"
+                    style={{
+                      width: "100%",
+                      maxHeight: 280,
+                      objectFit: "contain",
+                      borderRadius: 8,
+                      background: "#060910",
+                      display: "block",
+                      margin: "0 auto 10px",
+                    }}
+                  />
+                  <p style={{ fontSize: 12, fontWeight: 700, color: C.purple, marginBottom: 4 }}>
+                    {previewFile?.name}
+                  </p>
+                  <p style={{ fontSize: 11, color: C.t3 }}>
+                    {(previewFile?.size / 1024).toFixed(0)} KB · click to replace
+                  </p>
+                </div>
               ) : (
-                <p style={{ fontSize: 13, color: C.t3 }}>Click to add a product photo (optional)</p>
+                <div>
+                  <p style={{ fontSize: 28, marginBottom: 8 }}>🖼</p>
+                  <p style={{ fontSize: 13, color: C.t2 }}>Click to add your shop listing photo</p>
+                  <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>Shown in catalog — use a clear product shot</p>
+                </div>
               )}
             </div>
             {previewProgress && (

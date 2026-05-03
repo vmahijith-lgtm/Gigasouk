@@ -329,6 +329,10 @@ async def place_order(
     order_id  = str(uuid.uuid4())
     order_ref = f"GS-{order_id[:6].upper()}"
 
+    # Lock checkout price at the chosen factory commitment so Razorpay can run
+    # immediately after place_order (homepage / product checkout). Designer ↔ mfr
+    # can still counter in the room via bids + accept_bid to change locked_price.
+    committed = best["committed_price"]
     order_data = {
         "id":               order_id,
         "order_ref":        order_ref,
@@ -338,10 +342,12 @@ async def place_order(
         "commitment_id":    best["id"],
         "quantity":         req.quantity,
         "delivery_address": req.delivery_address,
-        "committed_price":  best["committed_price"],
+        "committed_price":  committed,
+        "locked_price":     committed,
         "distance_km":      best["distance_km"],
-        "status":           ORDER_STATUS_NEGOTIATING,
+        "status":           ORDER_STATUS_CONFIRMED,
         "payment_status":   "pending",
+        "confirmed_at":     datetime.now(timezone.utc).isoformat(),
         "notes":            req.notes,
         "created_at":       datetime.now(timezone.utc).isoformat(),
     }
@@ -376,7 +382,8 @@ async def place_order(
         "room_id":      room_id,
         "manufacturer": manufacturer_id,
         "distance_km":  best["distance_km"],
-        "status":       ORDER_STATUS_NEGOTIATING,
+        "status":       ORDER_STATUS_CONFIRMED,
+        "locked_price": committed,
     }
 
 

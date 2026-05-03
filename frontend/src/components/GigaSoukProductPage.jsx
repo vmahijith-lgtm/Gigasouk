@@ -87,7 +87,11 @@ export default function GigaSoukProductPage({ customerId }) {
             setSelected(null);
             setOrderMsg(`Order ${orderData.order_ref} placed! Your product is being made ${orderData.distance_km}km away.`);
           } catch (verErr) {
-            setOrderMsg(verErr?.response?.data?.detail || "Payment could not be verified. Contact support with your order ref.");
+            const detail = verErr?.response?.data?.detail;
+            setOrderMsg(
+              detail ||
+                "Payment could not be verified. If money was debited, contact support with your order ref.",
+            );
           }
         },
         theme: { color: C.green },
@@ -95,7 +99,8 @@ export default function GigaSoukProductPage({ customerId }) {
       const rzp = new Razorpay(options);
       rzp.open();
     } catch (e) {
-      setOrderMsg(e?.response?.data?.detail || "Order failed. Please try again.");
+      const detail = e?.response?.data?.detail;
+      setOrderMsg(detail || "Order failed. Please try again.");
     } finally {
       setOrdering(false);
     }

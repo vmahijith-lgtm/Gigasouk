@@ -2,18 +2,14 @@
 // ════════════════════════════════════════════════════════════════
 // components/FactoryFinderMap.tsx
 //
-// Customer sees all available factories on a map BEFORE ordering.
-// Shows: city, distance, rating, queue — NOT the exact address.
-// Customer selects a factory (or accepts the AI recommendation).
-// This replaces the silent "route to best factory" with a
-// transparent, interactive process.
+// Customer picks delivery, sees factories as a list with locations in text,
+// and can open Google Maps for directions (customer ↔ factory city anchor).
+// No embedded map — product photos stay the hero on the parent page.
 //
 // PRIVACY:
 //   The backend /available-factories endpoint returns ONLY:
-//     city, distance_km, rating, queue_depth, commitment_id
-//   Never: exact lat/lng, address, or manufacturer name.
-//   The map pins are placed at city centroid level, not the
-//   exact factory GPS.
+//     city, distance_km, rating, queue_depth, commitment_id, city_lat/lng
+//   Factory coordinates are city-centroid level, not exact workshop GPS.
 // ════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -53,12 +49,23 @@ interface Props {
 // Score bar width: score is 0–1 (lower = better), so invert for display
 const scoreBar = (score: number) => `${Math.round((1 - score) * 100)}%`;
 
+/** Google Maps directions: origin → destination (lat,lng each). */
+export function googleMapsDirectionsUrl(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+): string {
+  const origin = `${from.lat},${from.lng}`;
+  const dest = `${to.lat},${to.lng}`;
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}`;
+}
+
+function formatDeliveryWords(addr: DeliveryAddress): string {
+  const parts = [addr.line1?.trim(), addr.city?.trim(), addr.state?.trim(), addr.pincode?.trim()].filter(Boolean);
+  return parts.length ? parts.join(" · ") : `${addr.lat?.toFixed(4)}, ${addr.lng?.toFixed(4)}`;
+}
+
 export default function FactoryFinderMap({ designId, designTitle, onSelect, onCancel, initialAddress }: Props) {
-  const mapRef    = useRef<HTMLDivElement>(null);
-  const mapObj    = useRef<any>(null);
-  const markers   = useRef<any[]>([]);
-  const infoWins  = useRef<any[]>([]);
-  const booted    = useRef(false);
+  const booted = useRef(false);
 
   const [step,       setStep]       = useState<"address"|"loading"|"results"|"selected">("address");
   const [address,    setAddress]    = useState<DeliveryAddress | null>(null);
@@ -66,6 +73,10 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
   const [selected,   setSelected]   = useState<FactoryOption | null>(null);
   const [error,      setError]      = useState("");
   const [gpsLoading, setGpsLoading] = useState(false);
+
+  /** Selected row for directions & summary (fallback to nearest). */
+  const factoryForRoute =
+    step === "results" && factories.length > 0 ? selected ?? factories[0] : null;
 
   // ── Fetch available factories from backend ────────────────────
   const fetchFactories = useCallback(async (addr: DeliveryAddress) => {
@@ -138,94 +149,6 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
     fetchFactories(initialAddress);
   }, [initialAddress, fetchFactories]);
 
-  // ── Draw factory pins on map ──────────────────────────────────
-  useEffect(() => {
-    if (step !== "results" || !mapRef.current) return;
-
-    const G = (window as any).google;
-    if (!G) return;
-    const M = G.maps;
-
-    // Create or reuse map
-    if (!mapObj.current) {
-      mapObj.current = new M.Map(mapRef.current, {
-        center: { lat: address!.lat, lng: address!.lng },
-        zoom:   7,
-        mapTypeId: "roadmap",
-        styles: DARK_STYLE,
-        disableDefaultUI: true,
-        zoomControl: true,
-      });
-    }
-
-    // Clear old markers
-    markers.current.forEach(m => m.setMap(null));
-    infoWins.current.forEach(w => w.close());
-    markers.current = [];
-    infoWins.current = [];
-
-    const bounds = new M.LatLngBounds();
-
-    // Customer pin (blue)
-    if (address) {
-      new M.Marker({
-        position: { lat: address.lat, lng: address.lng },
-        map: mapObj.current,
-        icon: { path: M.SymbolPath.CIRCLE, scale:8, fillColor:"#4A9EFF", fillOpacity:1, strokeColor:"#fff", strokeWeight:2 },
-        title: "Your location",
-        zIndex: 100,
-      });
-      bounds.extend({ lat: address.lat, lng: address.lng });
-    }
-
-    // Factory pins — city centroid (privacy-safe)
-    factories.forEach((f, i) => {
-      const isNearest = i === 0;
-      const isSel = selected?.commitment_id === f.commitment_id;
-      const color = isNearest ? "#00E5A0" : isSel ? "#F5A623" : "#A78BFA";
-      const scale = isSel ? 14 : 10;
-
-      const marker = new M.Marker({
-        position: { lat: f.city_lat, lng: f.city_lng },
-        map: mapObj.current,
-        icon: {
-          path: M.SymbolPath.CIRCLE,
-          scale, fillColor: color, fillOpacity: 1,
-          strokeColor: "#fff", strokeWeight: 2,
-        },
-        title: `${f.city} — ${f.distance_km}km`,
-        zIndex: isSel ? 50 : 10,
-      });
-
-      const iw = new M.InfoWindow({
-        content: `
-          <div style="font-family:Inter,sans-serif;padding:6px 2px;min-width:160px">
-            ${isNearest ? '<div style="color:#059669;font-size:10px;font-weight:700;margin-bottom:4px">⭐ NEAREST</div>' : ""}
-            <div style="font-weight:700;font-size:13px;color:#111;margin-bottom:4px">${f.city}, ${f.state}</div>
-            <div style="font-size:11px;color:#555;display:grid;grid-template-columns:1fr 1fr;gap:4px">
-              <span>📏 ${f.distance_km}km</span>
-              <span>⭐ ${f.rating}/5</span>
-              <span>⏳ ${f.queue_depth} in queue</span>
-              <span>💰 ₹${f.committed_price.toLocaleString("en-IN")}</span>
-            </div>
-          </div>
-        `,
-      });
-
-      marker.addListener("click", () => {
-        infoWins.current.forEach(w => w.close());
-        iw.open(mapObj.current, marker);
-        setSelected(f);
-      });
-
-      markers.current.push(marker);
-      infoWins.current.push(iw);
-      bounds.extend({ lat: f.city_lat, lng: f.city_lng });
-    });
-
-    mapObj.current.fitBounds(bounds, { top: 60, bottom: 20, left: 20, right: 20 });
-  }, [step, factories, selected, address]);
-
   // ══════════════════════════════════════════
   // RENDER
   // ══════════════════════════════════════════
@@ -238,7 +161,7 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
       <div style={{ background:C.card, padding:"16px 20px", borderBottom:`1px solid ${C.border}`,
         display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <div style={{ color:C.t1, fontWeight:700, fontSize:15 }}>🏭 Find Your Factory</div>
+          <div style={{ color:C.t1, fontWeight:700, fontSize:15 }}>🏭 Delivery & factory</div>
           <div style={{ color:C.t3, fontSize:11, marginTop:2 }}>{designTitle}</div>
         </div>
         <button onClick={onCancel} style={{ background:"none", border:"none",
@@ -294,21 +217,59 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
       )}
 
       {/* ── Results ─────────────────────────────────────────────── */}
-      {step === "results" && (
+      {step === "results" && address && (
         <div>
-          {/* Map */}
-          <div ref={mapRef} style={{ width:"100%", height:280 }} />
+          {factoryForRoute && (
+          <div style={{
+            padding:"16px 20px",
+            borderBottom:`1px solid ${C.border}`,
+            background:C.card2,
+          }}>
+            <p style={{ fontSize:10, fontWeight:800, color:C.t3, letterSpacing:"0.08em", margin:"0 0 6px" }}>
+              YOUR DELIVERY
+            </p>
+            <p style={{ color:C.t1, fontSize:14, lineHeight:1.45, margin:0 }}>
+              {formatDeliveryWords(address)}
+            </p>
 
-          {/* Legend */}
-          <div style={{ background:C.card2, padding:"8px 16px", display:"flex", gap:16, fontSize:11, color:C.t3 }}>
-            <span>🔵 You</span>
-            <span>🟢 Nearest</span>
-            <span>🟡 Selected</span>
-            <span>🟣 Other factories</span>
+            <p style={{ fontSize:10, fontWeight:800, color:C.t3, letterSpacing:"0.08em", margin:"14px 0 6px" }}>
+              FACTORY AREA (SELECTED)
+            </p>
+            <p style={{ color:C.t1, fontSize:14, lineHeight:1.45, margin:0 }}>
+              {factoryForRoute.city}, {factoryForRoute.state}
+              <span style={{ color:C.t3, fontSize:12 }}> · ~{factoryForRoute.distance_km} km · ₹{factoryForRoute.committed_price.toLocaleString("en-IN")}</span>
+            </p>
+
+            <a
+              href={googleMapsDirectionsUrl(
+                { lat: address.lat, lng: address.lng },
+                { lat: factoryForRoute.city_lat, lng: factoryForRoute.city_lng }
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:"inline-block",
+                marginTop:14,
+                padding:"10px 16px",
+                borderRadius:10,
+                background:`${C.blue}18`,
+                border:`1px solid ${C.blue}55`,
+                color:C.blue,
+                fontSize:13,
+                fontWeight:700,
+                textDecoration:"none",
+              }}
+            >
+              Open route in Google Maps
+            </a>
+            <p style={{ color:C.t3, fontSize:10, lineHeight:1.45, margin:"10px 0 0" }}>
+              Opens directions from your delivery point to this factory’s regional location (city-level anchor — not the private workshop address).
+            </p>
           </div>
+          )}
 
           {/* Factory list */}
-          <div style={{ padding:16, display:"flex", flexDirection:"column", gap:8, maxHeight:300, overflowY:"auto" }}>
+          <div style={{ padding:16, display:"flex", flexDirection:"column", gap:8, maxHeight:280, overflowY:"auto" }}>
             <p style={{ color:C.t3, fontSize:11, margin:"0 0 4px" }}>
               {factories.length} {factories.length === 1 ? "factory" : "factories"} available · Tap to select
             </p>
@@ -356,15 +317,18 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
           {/* Confirm button */}
           <div style={{ padding:"0 16px 16px" }}>
             <button
-              onClick={() => selected && address && onSelect(selected, address)}
-              disabled={!selected}
+              onClick={() => {
+                const fac = selected ?? factories[0];
+                if (fac && address) onSelect(fac, address);
+              }}
+              disabled={!factoryForRoute}
               style={{
                 width:"100%", padding:"13px 0", borderRadius:10,
                 background:C.green, border:"none", color:"#060810",
                 fontSize:14, fontWeight:700, cursor:"pointer",
                 fontFamily:"Inter,sans-serif",
               }}>
-              ✅ Order from {selected?.city} — {selected?.distance_km}km away
+              ✅ Order from {(selected ?? factories[0])?.city} — {(selected ?? factories[0])?.distance_km}km away
             </button>
             <p style={{ color:C.t3, fontSize:10, textAlign:"center", margin:"8px 0 0" }}>
               Factory location shown at city level · Exact address never shared publicly
@@ -375,11 +339,3 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
     </div>
   );
 }
-
-const DARK_STYLE = [
-  { elementType:"geometry",         stylers:[{ color:"#0C1018" }] },
-  { elementType:"labels.text.fill", stylers:[{ color:"#B8C4D8" }] },
-  { featureType:"road", elementType:"geometry", stylers:[{ color:"#1A2230" }] },
-  { featureType:"water", elementType:"geometry", stylers:[{ color:"#060810" }] },
-  { featureType:"poi",  elementType:"geometry", stylers:[{ color:"#0C1018" }] },
-];

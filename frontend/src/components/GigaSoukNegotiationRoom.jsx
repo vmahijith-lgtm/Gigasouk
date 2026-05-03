@@ -6,6 +6,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { submitBid, acceptBid, sendMessage, markRead } from "../lib/api";
+import DesignMediaGallery from "./DesignMediaGallery";
+import { shortDesignChatLabel } from "../lib/negotiationLabels";
 
 const C = {
   bg: "#060810",
@@ -36,7 +38,14 @@ export default function GigaSoukNegotiationRoom({
   embedded = false,
 }) {
   const [room, setRoom] = useState(null);
-  const [meta, setMeta] = useState({ designTitle: "", orderRef: "", counterpartyName: "" });
+  const [meta, setMeta] = useState({
+    designTitle: "",
+    designSummary: "",
+    designPreviewUrl: null,
+    orderRef: "",
+    counterpartyName: "",
+    designId: null,
+  });
   const [messages, setMessages] = useState([]);
   const [bids, setBids] = useState([]);
   const [msgText, setMsgText] = useState("");
@@ -48,6 +57,8 @@ export default function GigaSoukNegotiationRoom({
   const [timeLeft, setTimeLeft] = useState("");
   const [roomLoading, setRoomLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
+  /** Set when PostgREST fails (embed/RLS) so we don't show a vague "Room not found." */
+  const [roomFetchError, setRoomFetchError] = useState("");
   const bottomRef = useRef();
 
   const enrichIncomingMessage = useCallback(async (row) => {
@@ -67,14 +78,17 @@ export default function GigaSoukNegotiationRoom({
     let cancelled = false;
     setRoomLoading(true);
     setAccessDenied(false);
+    setRoomFetchError("");
 
     (async () => {
+      // Only embed orders via negotiation_rooms.order_id (two FKs between these tables).
+      // Load design title separately — nested designs(embed) often fails RLS for manufacturers.
       const { data: r, error: rErr } = await supabase
         .from("negotiation_rooms")
         .select(
           `
           *,
-          orders ( order_ref, designs ( title ) )
+          orders!order_id ( order_ref, design_id )
         `
         )
         .eq("id", roomId)
@@ -82,7 +96,14 @@ export default function GigaSoukNegotiationRoom({
 
       if (cancelled) return;
 
-      if (rErr || !r) {
+      if (rErr) {
+        setRoom(null);
+        setRoomFetchError(rErr.message || "Could not load this room from the database.");
+        setRoomLoading(false);
+        return;
+      }
+
+      if (!r) {
         setRoom(null);
         setRoomLoading(false);
         return;
@@ -103,7 +124,20 @@ export default function GigaSoukNegotiationRoom({
 
       setRoom(r);
       setBidAmount(String(r.base_price ?? ""));
-      const title = r.orders?.designs?.title || "";
+      let title = "";
+      let designSummary = "";
+      let designPreviewUrl = null;
+      const designId = r.orders?.design_id;
+      if (designId) {
+        const { data: drow } = await supabase
+          .from("designs")
+          .select("title, description, preview_image_url")
+          .eq("id", designId)
+          .maybeSingle();
+        title = drow?.title || "";
+        designSummary = drow ? shortDesignChatLabel(drow) : "";
+        designPreviewUrl = drow?.preview_image_url || null;
+      }
       const ref = r.orders?.order_ref || "";
       let cp = "";
       if (userRole === "designer") {
@@ -122,7 +156,14 @@ export default function GigaSoukNegotiationRoom({
         cp = prow?.full_name || "Designer";
       }
       if (!cancelled) {
-        setMeta({ designTitle: title, orderRef: ref, counterpartyName: cp });
+        setMeta({
+          designTitle: title,
+          designSummary: designSummary || title,
+          designPreviewUrl,
+          orderRef: ref,
+          counterpartyName: cp,
+          designId: designId || null,
+        });
       }
 
       const [mRes, bRes] = await Promise.all([
@@ -373,11 +414,16 @@ export default function GigaSoukNegotiationRoom({
           fontFamily: "Inter,sans-serif",
           ...shellHeight,
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
+          gap: 8,
         }}
       >
-        <p style={{ color: C.red, fontSize: 14 }}>Room not found.</p>
+        <p style={{ color: C.red, fontSize: 14, maxWidth: 420, lineHeight: 1.5 }}>
+          {roomFetchError ||
+            "No negotiation room with this link, or your account cannot see it (wrong login or RLS). Open the chat from your designer or manufacturer dashboard."}
+        </p>
       </div>
     );
   }
@@ -403,38 +449,69 @@ export default function GigaSoukNegotiationRoom({
         }}
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: C.green + "22",
-              border: `1px solid ${C.green}44`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 800,
-              fontSize: 14,
-              color: C.green,
-              flexShrink: 0,
-            }}
-          >
-            {initials(meta.counterpartyName)}
-          </div>
+          {meta.designPreviewUrl ? (
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                overflow: "hidden",
+                border: `1px solid ${C.border}`,
+                background: "#060910",
+                flexShrink: 0,
+              }}
+            >
+              <img
+                src={meta.designPreviewUrl}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            </div>
+          ) : (
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: C.green + "22",
+                border: `1px solid ${C.green}44`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 800,
+                fontSize: 14,
+                color: C.green,
+                flexShrink: 0,
+              }}
+            >
+              {initials(meta.counterpartyName)}
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 15, fontWeight: 800, color: C.t1, marginBottom: 2 }}>
-              {meta.counterpartyName}
+            <p
+              style={{
+                fontSize: 15,
+                fontWeight: 800,
+                color: C.t1,
+                marginBottom: 4,
+                lineHeight: 1.35,
+              }}
+            >
+              {meta.designSummary || meta.designTitle}
             </p>
-            <p style={{ fontSize: 12, color: C.t3 }}>
-              {userRole === "designer" ? "Manufacturer" : "Designer"} · You are chatting 1:1 on this order
+            <p style={{ fontSize: 12, color: C.t2, marginBottom: 2 }}>{meta.counterpartyName}</p>
+            <p style={{ fontSize: 11, color: C.t3, lineHeight: 1.45 }}>
+              {userRole === "designer" ? "Manufacturer" : "Designer"} · 1:1 on this order
             </p>
-            {meta.designTitle && (
-              <p style={{ fontSize: 13, color: C.blue, fontWeight: 600, marginTop: 6 }}>
-                {meta.designTitle}
-              </p>
-            )}
+            {meta.designTitle &&
+              meta.designSummary &&
+              meta.designTitle.trim() !== meta.designSummary.trim() && (
+                <p style={{ fontSize: 12, color: C.blue, fontWeight: 600, marginTop: 6 }}>
+                  {meta.designTitle}
+                </p>
+              )}
             {meta.orderRef && (
-              <p style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>Order {meta.orderRef}</p>
+              <p style={{ fontSize: 11, color: C.t3, marginTop: 4 }}>Order {meta.orderRef}</p>
             )}
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -483,6 +560,35 @@ export default function GigaSoukNegotiationRoom({
           Base reference: ₹{Number(room.base_price).toLocaleString("en-IN")}
         </p>
       </div>
+
+      {meta.designId && (
+        <div
+          style={{
+            padding: "12px 18px",
+            borderBottom: `1px solid ${C.border}`,
+            background: C.bg,
+            maxHeight: "min(42vh, 380px)",
+            overflowY: "auto",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: C.t3,
+              letterSpacing: "0.08em",
+              margin: "0 0 10px",
+            }}
+          >
+            DESIGN PHOTOS
+          </p>
+          <DesignMediaGallery
+            designId={meta.designId}
+            title={meta.designTitle}
+            storefront
+          />
+        </div>
+      )}
 
       {activeBid && !isLocked && (
         <div

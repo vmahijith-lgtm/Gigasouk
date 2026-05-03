@@ -197,7 +197,7 @@ export default function CustomerDashboardPage() {
         <section style={{ marginBottom: 28 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>Your orders and payments</h2>
           <p style={{ fontSize: 12, color: T.t3, marginBottom: 12, lineHeight: 1.5 }}>
-            Pay with UPI or card via Razorpay after your price is locked in negotiation. The publishable key comes from the server; secrets never appear in the browser.
+            Pay with UPI or card via Razorpay. Your order price is set from the factory commitment when you check out; the designer and factory can still adjust it in negotiation until you pay. The publishable key comes from the server.
           </p>
           {payMsg && (
             <p style={{ fontSize: 13, color: payMsg.startsWith("Payment received") ? T.green : "#F87171", marginBottom: 12 }}>
@@ -293,7 +293,7 @@ export default function CustomerDashboardPage() {
                 </div>
                 {photosOpen && o.design_id && (
                   <div style={{ marginTop: 14, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
-                    <DesignMediaGallery designId={o.design_id} title={o.designs?.title} />
+                    <DesignMediaGallery designId={o.design_id} title={o.designs?.title} storefront />
                   </div>
                 )}
               </div>

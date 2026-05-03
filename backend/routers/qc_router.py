@@ -8,10 +8,13 @@
 
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel
 
 from db import db_admin, get_one, safe_update
+from routers.auth_router import verify_jwt
 from config import QC_REQUIRED_PHOTOS, ORDER_STATUS_QC, ORDER_STATUS_SHIPPED
 from services.gigasouk_qc    import run_qc_check
 from services.shiprocket_service import create_shipment
@@ -29,10 +32,9 @@ router = APIRouter()
 # ════════════════════════════════════════════════════════════════
 
 class QCSubmitRequest(BaseModel):
-    order_id:        str
-    manufacturer_id: str
-    photo_urls:      list[str]   # Must be QC_REQUIRED_PHOTOS items
-    notes:           str = ""
+    order_id:   str
+    photo_urls: list[str]   # Must be QC_REQUIRED_PHOTOS fetchable URLs (e.g. signed)
+    notes:      str = ""
 
 
 class QCManualReviewRequest(BaseModel):
@@ -48,21 +50,39 @@ class QCManualReviewRequest(BaseModel):
 # ════════════════════════════════════════════════════════════════
 
 @router.post("/qc/submit")
-async def submit_qc(req: QCSubmitRequest, bg: BackgroundTasks):
+async def submit_qc(
+    req: QCSubmitRequest,
+    bg: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+):
     """
     Manufacturer uploads photos of the finished part.
     AI runs dimension check against the CAD spec.
     PASS → shipping is triggered automatically.
     FAIL → admin is alerted, manufacturer must re-make.
+
+    Caller must be authenticated as the order's manufacturer (JWT — manufacturer_id is not taken from the body).
     """
+
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile.get("role") != "manufacturer":
+        raise HTTPException(403, "Manufacturers only")
+    mfr = get_one("manufacturers", {"profile_id": profile["id"]})
+    if not mfr:
+        raise HTTPException(404, "Manufacturer profile not found")
 
     order = get_one("orders", {"id": req.order_id})
     if not order:
         raise HTTPException(404, "Order not found")
-    if order["manufacturer_id"] != req.manufacturer_id:
+    if order["manufacturer_id"] != mfr["id"]:
         raise HTTPException(403, "Not your order")
-    if order["status"] not in (ORDER_STATUS_QC, "cutting"):
-        raise HTTPException(400, f"Order is not ready for QC. Current status: {order['status']}")
+    # cutting = first attempt; qc_failed = retry after AI/admin failure
+    if order["status"] not in ("cutting", "qc_failed"):
+        raise HTTPException(
+            400,
+            f"Order is not ready for QC. Current status: {order['status']}",
+        )
     if len(req.photo_urls) < QC_REQUIRED_PHOTOS:
         raise HTTPException(400, f"Please upload all {QC_REQUIRED_PHOTOS} required photos")
 
@@ -81,7 +101,7 @@ async def submit_qc(req: QCSubmitRequest, bg: BackgroundTasks):
     db_admin.table("qc_records").insert({
         "id":              qc_id,
         "order_id":        req.order_id,
-        "manufacturer_id": req.manufacturer_id,
+        "manufacturer_id": mfr["id"],
         "photo_urls":      req.photo_urls,
         "ai_passed":       qc_result["passed"],
         "ai_score":        qc_result.get("score", 0),

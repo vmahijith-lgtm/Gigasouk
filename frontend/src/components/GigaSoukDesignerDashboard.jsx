@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase";
 import { getWalletTransactions } from "../lib/api";
 import GigaSoukStagingArea from "./GigaSoukStagingArea";
 import NegotiationList from "./NegotiationList";
+import DesignMediaGallery from "./DesignMediaGallery";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -57,7 +58,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
           supabase.rpc("get_designer_stats", { p_designer_id: designerId }),
           // Orders for designs owned by this designer
           supabase.from("orders")
-            .select("id, order_ref, status, payment_status, locked_price, committed_price, created_at, designs!inner(title, designer_id)")
+            .select("id, design_id, order_ref, status, payment_status, locked_price, committed_price, created_at, designs!inner(title, designer_id)")
             .eq("designs.designer_id", designerId)
             .order("created_at", { ascending: false }).limit(20),
           token
@@ -218,17 +219,23 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
             <div key={o.id} style={{
               background: C.card, border: `1px solid ${C.border}`,
               borderRadius: 10, padding: "14px 18px", marginBottom: 10,
-              display: "flex", justifyContent: "space-between", alignItems: "center"
             }}>
-              <div>
-                <p style={{ fontWeight: 700, color: C.t1 }}>{o.order_ref}</p>
-                <p style={{ fontSize: 12, color: C.t3, marginTop: 2 }}>{o.designs?.title}</p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <p style={{ fontWeight: 700, color: C.t1 }}>{o.order_ref}</p>
+                  <p style={{ fontSize: 12, color: C.t3, marginTop: 2 }}>{o.designs?.title}</p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <p style={{ fontWeight: 700, color: C.green }}>₹{Number(o.locked_price || o.committed_price).toLocaleString("en-IN")}</p>
+                  <span style={{ fontSize: 11, color: statusColor[o.status] || C.t3 }}>{o.status}</span>
+                  <p style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>Payment: {o.payment_status || "pending"}</p>
+                </div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <p style={{ fontWeight: 700, color: C.green }}>₹{Number(o.locked_price || o.committed_price).toLocaleString("en-IN")}</p>
-                <span style={{ fontSize: 11, color: statusColor[o.status] || C.t3 }}>{o.status}</span>
-                <p style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>Payment: {o.payment_status || "pending"}</p>
-              </div>
+              {o.design_id && (
+                <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                  <DesignMediaGallery designId={o.design_id} title={o.designs?.title} storefront />
+                </div>
+              )}
             </div>
           ))}
         </div>

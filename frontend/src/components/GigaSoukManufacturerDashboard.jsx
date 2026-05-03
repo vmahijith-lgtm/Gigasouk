@@ -39,6 +39,35 @@ const C = {
   red: "#F87171", teal: "#2DD4BF", t1: "#F4F6FC", t2: "#B8C4D8", t3: "#5A6A80",
 };
 
+function apiErrorDetail(e) {
+  const d = e?.response?.data?.detail;
+  if (d == null) return e?.message || "";
+  if (typeof d === "string") return d;
+  if (Array.isArray(d))
+    return d
+      .map((x) => (typeof x === "object" && x && "msg" in x ? x.msg : JSON.stringify(x)))
+      .filter(Boolean)
+      .join("; ");
+  return String(d);
+}
+
+/** Signed view URLs for product-images paths (workshop folder). */
+async function signProductImagePaths(paths) {
+  const urls = [];
+  for (const p of paths || []) {
+    const raw = (p || "").trim();
+    if (!raw) continue;
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      urls.push(raw);
+      continue;
+    }
+    const { data, error } = await supabase.storage.from("product-images").createSignedUrl(raw, 7200);
+    const u = data?.signedUrl || data?.signedURL;
+    if (!error && u) urls.push(u);
+  }
+  return urls;
+}
+
 // ── Tab list (Workshop Profile is only in the header — not duplicated here) ──
 const TABS = [
   { key: "board", label: "Commitment Board" },
@@ -51,8 +80,8 @@ const TABS = [
 
 const STATUS_COLOR = {
   routing: "#5A6A80", negotiating: "#F5A623", confirmed: "#4A9EFF",
-  cutting: "#A78BFA", qc_review: "#2DD4BF", shipped: "#00E5A0",
-  delivered: "#00E5A0", cancelled: "#F87171",
+  cutting: "#A78BFA", qc_review: "#2DD4BF", qc_failed: "#F87171",
+  shipped: "#00E5A0", delivered: "#00E5A0", cancelled: "#F87171",
 };
 
 const COMMITMENT_STATUS_COLOR = {
@@ -79,6 +108,8 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
   const [showcaseBusy, setShowcaseBusy] = useState(null);
+  /** commitment id → signed URLs for immediate thumbnails (storage paths are not viewable in <img> alone). */
+  const [showcaseThumbs, setShowcaseThumbs] = useState({});
   const [jobs, setJobs] = useState([]);
   const [commitments, setCommitments] = useState([]);
   const [payouts, setPayouts] = useState([]);
@@ -144,6 +175,24 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
     })();
   }, [manufacturerId, jobsRefreshKey]);
 
+  // Resolve workshop photo paths to signed URLs so previews render in Active Jobs.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const next = {};
+      for (const c of commitments) {
+        const paths = c.showcase_image_urls;
+        if (!Array.isArray(paths) || !paths.length) continue;
+        const urls = await signProductImagePaths(paths);
+        if (urls.length) next[c.id] = urls;
+      }
+      if (!cancelled) setShowcaseThumbs(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [commitments]);
+
   useEffect(() => {
     if (workshopOpen && workshopPanelRef.current) {
       workshopPanelRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -172,21 +221,36 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         const raw = file.name.split(".").pop() || "jpg";
         const ext = raw.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "jpg";
         const path = `${user.id}/showcase/${commitment.id}/${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage.from("product-images").upload(path, file, {
+        const { error: upErr } = await supabase.storage.from("product-images").upload(path, file, {
           cacheControl: "31536000",
           upsert: false,
           contentType: file.type || "image/jpeg",
         });
-        if (error) throw error;
+        if (upErr) throw upErr;
         newPaths.push(path);
       }
-      const merged = [...(commitment.showcase_image_urls || []), ...newPaths];
+      const prevPaths = Array.isArray(commitment.showcase_image_urls)
+        ? commitment.showcase_image_urls
+        : [];
+      const merged = [...prevPaths, ...newPaths];
       await updateCommitmentShowcase(commitment.id, merged);
-      setJobsRefreshKey(k => k + 1);
-      setProfileFlash("Workshop photos saved. Customers see them with this design.");
+
+      const signedNew = await signProductImagePaths(newPaths);
+      if (signedNew.length) {
+        setShowcaseThumbs((prev) => ({
+          ...prev,
+          [commitment.id]: [...(prev[commitment.id] || []), ...signedNew],
+        }));
+      }
+
+      setJobsRefreshKey((k) => k + 1);
+      setProfileFlash("Workshop photos saved. Previews update below.");
     } catch (e) {
-      const detail = e?.response?.data?.detail || e?.message || "";
-      setProfileFlash(detail || "Upload failed.");
+      const msg = apiErrorDetail(e);
+      setProfileFlash(
+        msg ||
+          "Upload failed. Check Storage bucket product-images exists, RLS allows your uid prefix, and API /commitments/…/showcase is reachable.",
+      );
     } finally {
       setShowcaseBusy(null);
     }
@@ -272,25 +336,60 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
     return rows;
   }, [jobs, commitments]);
 
-  // ── QC: upload photos to Supabase Storage ──────────────────────
+  // ── QC: upload to qc-photos/{auth.uid()}/qc/{orderId}/… then signed URL for backend AI ──
   async function handlePhotoUpload(e) {
-    const files = Array.from(e.target.files);
-    if (!files.length) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !qcOrder) return;
+    const room = 5 - photos.length;
+    if (room <= 0) return;
     setUploading(true);
-    const urls = [];
-    for (const file of files) {
-      const path = `qc/${qcOrder.id}/${Date.now()}_${file.name}`;
-      const { data, error } = await supabase.storage.from("qc-photos").upload(path, file);
-      if (!error) {
-        const { data: pub } = supabase.storage.from("qc-photos").getPublicUrl(path);
-        urls.push(pub.publicUrl);
+    setQcMsg({ text: "", type: "" });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        setQcMsg({ text: "Sign in to upload.", type: "error" });
+        return;
       }
+      const batch = files.slice(0, room);
+      const added = [];
+      for (const file of batch) {
+        const raw = file.name.split(".").pop() || "jpg";
+        const ext = raw.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "jpg";
+        const path = `${user.id}/qc/${qcOrder.id}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("qc-photos").upload(path, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type || "image/jpeg",
+        });
+        if (upErr) {
+          setQcMsg({
+            text: upErr.message || "Upload failed. Ensure qc-photos bucket exists and RLS allows paths under your user id.",
+            type: "error",
+          });
+          break;
+        }
+        const { data: signed, error: signErr } = await supabase.storage
+          .from("qc-photos")
+          .createSignedUrl(path, 7200);
+        const signedUrl = signed?.signedUrl || signed?.signedURL;
+        if (signErr || !signedUrl) {
+          setQcMsg({ text: signErr?.message || "Could not sign image URL for QC.", type: "error" });
+          break;
+        }
+        added.push(signedUrl);
+      }
+      if (added.length) setPhotos(prev => [...prev, ...added].slice(0, 5));
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
-    setPhotos(prev => [...prev, ...urls]);
-    setUploading(false);
   }
 
-  // ── QC: submit for AI check ─────────────────────────────────────
+  function removeQCPhoto(index) {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
+  }
+
+  // ── QC: submit for AI check (JWT identifies manufacturer — not spoofable) ──
   async function handleQCSubmit() {
     if (photos.length < 5) {
       setQcMsg({ text: "Please upload all 5 required photos.", type: "error" });
@@ -301,17 +400,16 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
     try {
       const { data } = await submitQC({
         order_id: qcOrder.id,
-        manufacturer_id: manufacturerId,
         photo_urls: photos,
       });
       if (data.passed) {
         setQcMsg({ text: "QC passed! Shipping is being arranged automatically.", type: "success" });
-        setJobs(prev => prev.map(j => j.id === qcOrder.id ? { ...j, status: "shipped" } : j));
       } else {
-        setQcMsg({ text: `QC failed: ${data.reason}. Please re-make the part and resubmit.`, type: "error" });
+        setQcMsg({ text: `QC failed: ${data.reason || data.message || "Try again"}. Re-make the part and resubmit.`, type: "error" });
       }
       setQcOrder(null);
       setPhotos([]);
+      setJobsRefreshKey(k => k + 1);
     } catch (e) {
       setQcMsg({ text: e?.response?.data?.detail || "QC submission failed.", type: "error" });
     } finally {
@@ -340,7 +438,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
   }
 
   const totalEarnings = payouts.reduce((s, p) => s + Number(p.manufacturer_amount || 0), 0);
-  const qcReadyJobs = jobs.filter(j => j.status === "cutting");
+  const qcReadyJobs = jobs.filter(j => j.status === "cutting" || j.status === "qc_failed");
 
   const actions = [
     {
@@ -824,12 +922,55 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                             {(c.showcase_image_urls || []).length} workshop photo(s) saved
                           </p>
                         )}
+                        {showcaseThumbs[c.id]?.length > 0 && (
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                              marginTop: 10,
+                              alignItems: "center",
+                            }}
+                          >
+                            {showcaseThumbs[c.id].map((url, idx) => (
+                              <a
+                                key={`${url}-${idx}`}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: "block",
+                                  width: 76,
+                                  height: 76,
+                                  borderRadius: 10,
+                                  overflow: "hidden",
+                                  border: `1px solid ${C.border}`,
+                                  flexShrink: 0,
+                                  background: "#060910",
+                                }}
+                                title="Open full size"
+                              >
+                                <img
+                                  src={url}
+                                  alt=""
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    display: "block",
+                                  }}
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
                         {c.design_id ? (
                           <div style={{ marginTop: 12 }}>
                             <DesignMediaGallery
                               designId={c.design_id}
                               title={c.designs?.title}
                               onlyCommitmentId={c.id}
+                              storefront
                             />
                           </div>
                         ) : null}
@@ -884,7 +1025,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                   </p>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginLeft: 16 }}>
-                  {(job.status === "confirmed" || job.status === "cutting") &&
+                  {(job.status === "confirmed" || job.status === "cutting" || job.status === "qc_failed") &&
                     job.designs?.cad_file_url && (
                     <button
                       onClick={() => handleDownloadCad(job)}
@@ -909,13 +1050,14 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                       Start Manufacturing
                     </button>
                   )}
-                  {job.status === "cutting" && (
-                    <button onClick={() => { setQcOrder(job); setTab("qc"); setPhotos([]); }}
+                  {(job.status === "cutting" || job.status === "qc_failed") && (
+                    <button onClick={() => { setQcOrder(job); setTab("qc"); setPhotos([]); setQcMsg({ text: "", type: "" }); }}
                       style={{
                         padding: "8px 16px", borderRadius: 8, border: "none",
-                        background: C.gold, color: "#060810", fontWeight: 700, fontSize: 12, cursor: "pointer"
+                        background: job.status === "qc_failed" ? C.red + "33" : C.gold,
+                        color: "#060810", fontWeight: 700, fontSize: 12, cursor: "pointer"
                       }}>
-                      Submit QC Photos
+                      {job.status === "qc_failed" ? "Resubmit QC" : "Submit QC Photos"}
                     </button>
                   )}
                   {job.shiprocket_awb && (
@@ -930,6 +1072,15 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                   )}
                 </div>
               </div>
+              {job.design_id && (
+                <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                  <DesignMediaGallery
+                    designId={job.design_id}
+                    title={job.designs?.title}
+                    storefront
+                  />
+                </div>
+              )}
             </div>
             );
           })}
@@ -950,27 +1101,41 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
 
       {/* ── QC UPLOAD TAB ────────────────────────────────────────── */}
       {tab === "qc" && (
-        <div style={{ maxWidth: 520 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>QC Photo Upload</h3>
-          <p style={{ fontSize: 13, color: C.t3, marginBottom: 20 }}>
-            Upload 5 photos of the finished part. AI checks dimensions to ±0.5mm.
+        <div style={{ maxWidth: 560 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>QC photo upload</h3>
+          <p style={{ fontSize: 13, color: C.t3, marginBottom: 8, lineHeight: 1.5 }}>
+            Upload <strong style={{ color: C.t2 }}>five</strong> clear photos of the finished part (top, front, side, detail, scale/context).
+            Files are stored under your account in <code style={{ fontSize: 11, color: C.gold }}>qc-photos</code>; the AI receives time-limited links.
+          </p>
+          <p style={{ fontSize: 12, color: C.t3, marginBottom: 20 }}>
+            AI compares against the design CAD reference (±0.5&nbsp;mm tolerance by default). Use good lighting and keep the part in frame.
           </p>
 
           {/* Select order */}
           {!qcOrder && (
             <>
-              <p style={{ fontSize: 12, color: C.t3, marginBottom: 10 }}>Select an order ready for QC:</p>
+              <p style={{ fontSize: 12, color: C.t3, marginBottom: 10 }}>Orders in manufacturing or waiting for QC retry:</p>
               {qcReadyJobs.length === 0 && (
-                <p style={{ color: C.t3, padding: 20 }}>No orders in "cutting" state yet.</p>
+                <p style={{ color: C.t3, padding: 20 }}>No orders need QC right now (requires status &quot;cutting&quot; or &quot;qc_failed&quot;).</p>
               )}
               {qcReadyJobs.map(j => (
                 <div key={j.id} onClick={() => { setQcOrder(j); setPhotos([]); setQcMsg({ text: "", type: "" }); }}
                   style={{
-                    background: C.card, border: `1px solid ${C.gold}88`, borderRadius: 10,
+                    background: C.card,
+                    border: `1px solid ${j.status === "qc_failed" ? C.red + "66" : C.gold + "88"}`,
+                    borderRadius: 10,
                     padding: "14px 18px", marginBottom: 10, cursor: "pointer"
                   }}>
-                  <p style={{ fontWeight: 700, color: C.t1 }}>{j.order_ref}</p>
-                  <p style={{ fontSize: 12, color: C.t3, marginTop: 2 }}>{j.designs?.title}</p>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <p style={{ fontWeight: 700, color: C.t1, margin: 0 }}>{j.order_ref}</p>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700,
+                      color: j.status === "qc_failed" ? C.red : C.purple,
+                      background: (j.status === "qc_failed" ? C.red : C.purple) + "22",
+                      padding: "2px 8px", borderRadius: 20,
+                    }}>{j.status === "qc_failed" ? "Retry QC" : "Cutting"}</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: C.t3, marginTop: 6 }}>{j.designs?.title}</p>
                 </div>
               ))}
             </>
@@ -980,14 +1145,19 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
           {qcOrder && (
             <>
               <div style={{
-                background: C.card, border: `1px solid ${C.gold}`, borderRadius: 10,
-                padding: "14px 18px", marginBottom: 20
+                background: C.card, border: `1px solid ${qcOrder.status === "qc_failed" ? C.red + "55" : C.gold}`,
+                borderRadius: 10,
+                padding: "14px 18px", marginBottom: 16
               }}>
-                <p style={{ fontSize: 12, color: C.t3 }}>Submitting QC for:</p>
-                <p style={{ fontWeight: 700, color: C.t1 }}>{qcOrder.order_ref} — {qcOrder.designs?.title}</p>
+                <p style={{ fontSize: 12, color: C.t3 }}>QC for</p>
+                <p style={{ fontWeight: 700, color: C.t1, marginBottom: 6 }}>{qcOrder.order_ref} — {qcOrder.designs?.title}</p>
+                {Array.isArray(qcOrder.qc_records) && qcOrder.qc_records.length > 0 && (
+                  <p style={{ fontSize: 11, color: C.t3, margin: 0 }}>
+                    Previous QC attempt{qcOrder.qc_records.length > 1 ? "s" : ""}: {qcOrder.qc_records.length}
+                  </p>
+                )}
               </div>
 
-              {/* Flash */}
               {qcMsg.text && (
                 <div style={{
                   background: (qcMsg.type === "success" ? C.green : C.red) + "18",
@@ -999,69 +1169,86 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                 </div>
               )}
 
-              {/* Photo slots */}
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                gap: 12,
-                marginBottom: 16,
+                gap: 10,
+                marginBottom: 12,
               }}>
-                {[1, 2, 3, 4, 5].map(n => {
-                  const url = photos[n - 1];
+                {[0, 1, 2, 3, 4].map((idx) => {
+                  const url = photos[idx];
                   return (
-                    <div key={n} style={{
-                      minHeight: 96,
+                    <div key={idx} style={{
+                      position: "relative",
+                      minHeight: 88,
                       aspectRatio: "1",
                       background: C.card2,
                       border: `1px solid ${url ? C.green : C.border}`,
                       borderRadius: 10,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 11,
-                      color: url ? C.green : C.t3,
                       overflow: "hidden",
                     }}>
-                      {url
-                        ? <img src={url} alt={`QC ${n}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        : `Slot ${n}`}
+                      {url ? (
+                        <>
+                          <img src={url} alt={`QC ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <button
+                            type="button"
+                            onClick={() => removeQCPhoto(idx)}
+                            style={{
+                              position: "absolute", top: 4, right: 4,
+                              width: 22, height: 22, borderRadius: 6,
+                              border: "none", background: "#000000aa", color: "#fff",
+                              fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 0,
+                            }}
+                            aria-label="Remove photo"
+                          >
+                            ×
+                          </button>
+                        </>
+                      ) : (
+                        <div style={{
+                          height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 10, color: C.t3, textAlign: "center", padding: 6,
+                        }}>
+                          Photo {idx + 1}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
 
               <p style={{ fontSize: 11, color: C.t3, marginBottom: 12 }}>
-                {photos.length}/5 photos uploaded. {photos.length < 5 ? `Need ${5 - photos.length} more.` : "All photos ready."}
+                {photos.length}/5 photos · {photos.length < 5 ? `Add ${5 - photos.length} more.` : "Ready to submit."}
               </p>
 
-              <input ref={fileRef} type="file" multiple accept="image/*"
+              <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp"
                 onChange={handlePhotoUpload} style={{ display: "none" }} />
 
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => fileRef.current?.click()} disabled={uploading || photos.length >= 5}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading || photos.length >= 5}
                   style={{
-                    flex: 1, padding: "11px 0", borderRadius: 8, border: `1px solid ${C.border}`,
+                    flex: 1, minWidth: 140, padding: "11px 0", borderRadius: 8, border: `1px solid ${C.border}`,
                     background: C.card2, color: C.t2, fontWeight: 600, fontSize: 14,
                     cursor: uploading || photos.length >= 5 ? "not-allowed" : "pointer"
                   }}>
-                  {uploading ? "Uploading..." : "Add Photos"}
+                  {uploading ? "Working…" : "Add photos"}
                 </button>
-                <button onClick={handleQCSubmit} disabled={uploading || photos.length < 5}
+                <button type="button" onClick={handleQCSubmit} disabled={uploading || photos.length < 5}
                   style={{
-                    flex: 1, padding: "11px 0", borderRadius: 8, border: "none",
+                    flex: 1, minWidth: 140, padding: "11px 0", borderRadius: 8, border: "none",
                     background: photos.length >= 5 ? C.green : C.t3, color: "#060810",
-                    fontWeight: 700, fontSize: 14, cursor: photos.length >= 5 ? "pointer" : "not-allowed"
+                    fontWeight: 700, fontSize: 14, cursor: photos.length >= 5 && !uploading ? "pointer" : "not-allowed"
                   }}>
-                  Submit for QC
+                  Submit for AI QC
                 </button>
               </div>
 
-              <button onClick={() => { setQcOrder(null); setPhotos([]); }}
+              <button type="button" onClick={() => { setQcOrder(null); setPhotos([]); setQcMsg({ text: "", type: "" }); }}
                 style={{
                   marginTop: 12, background: "none", border: "none", color: C.t3,
                   fontSize: 12, cursor: "pointer"
                 }}>
-                ← Back
+                ← Choose another order
               </button>
             </>
           )}

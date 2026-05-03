@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════════
 // app/page.tsx — GigaSouk Home / Customer Shop
-// Shows the product catalog. Clicking a product opens the
-// FactoryFinderMap so the customer can choose their nearest factory.
+// Shows the product catalog. Clicking a product opens a modal: product photos
+// first, then delivery + factory list (text locations + Google Maps link).
 // ════════════════════════════════════════════════════════════════
 "use client";
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
@@ -11,7 +11,7 @@ import { getCatalogDesigns } from "../lib/api";
 import type { DeliveryAddress } from "../components/MapComponents";
 import DesignMediaGallery from "../components/DesignMediaGallery";
 
-// Lazy-load the map (heavy Google Maps SDK)
+// Lazy-load factory picker (loads Google Maps JS for address autocomplete only)
 const FactoryFinderMap = lazy(() => import("../components/FactoryFinderMap"));
 
 /* ── Design tokens ─────────────────────────────────────────── */
@@ -121,15 +121,26 @@ export default function HomePage() {
             });
             setSelected(null);
             setOrderMsg(`✓ Order ${od.order_ref} placed! Factory in ${factory.city} (${od.distance_km}km away)`);
-          } catch {
-            setOrderMsg("Payment could not be verified. If money was debited, contact support with your order ref.");
+          } catch (verErr: unknown) {
+            const detail =
+              verErr && typeof verErr === "object" && "response" in verErr
+                ? (verErr as { response?: { data?: { detail?: string } } }).response?.data?.detail
+                : undefined;
+            setOrderMsg(
+              detail ||
+                "Payment could not be verified. If money was debited, contact support with your order ref.",
+            );
           }
         },
         theme: { color: T.green },
       };
       new Razorpay(opts).open();
-    } catch(e:any) {
-      setOrderMsg(e?.response?.data?.detail || "Order failed. Try again.");
+    } catch (e: unknown) {
+      const detail =
+        e && typeof e === "object" && "response" in e
+          ? (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+      setOrderMsg(detail || "Order failed. Try again.");
     } finally {
       setOrdering(false);
     }
@@ -430,16 +441,22 @@ export default function HomePage() {
         </div>
       </footer>
 
-      {/* ── Order Modal → FactoryFinderMap ──────────────────────── */}
+      {/* ── Order Modal: photos first, then factory picker (no embedded map) ─ */}
       {selected && (
         <div onClick={()=>setSelected(null)}
           style={{position:"fixed",inset:0,background:"#00000095",zIndex:100,
-            display:"flex",alignItems:"center",justifyContent:"center",padding:20,
+            display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 20px",
             overflowY:"auto"}}>
           <div onClick={e=>e.stopPropagation()}
-            style={{width:"100%",maxWidth:580}}>
+            style={{width:"100%",maxWidth:680,marginTop:12,marginBottom:24}}>
 
-            <DesignMediaGallery designId={selected.id} title={selected.title} panel />
+            <DesignMediaGallery
+              designId={selected.id}
+              title={selected.title}
+              panel
+              storefront
+              emphasizePhotos
+            />
 
             {!user ? (
               /* Not signed in */

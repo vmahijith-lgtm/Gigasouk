@@ -28,6 +28,7 @@ from config import (
     DESIGN_STATUS_DRAFT,
     DESIGN_STATUS_PAUSED,
     DESIGN_STATUS_LIVE,
+    DESIGN_STATUS_SEEKING,
 )
 from routers.auth_router import verify_jwt   # reuse shared JWT helper
 
@@ -155,7 +156,15 @@ def _can_access_design_media(design: dict, profile: Optional[dict]) -> bool:
             .execute()
             .data
         )
-        return bool(hit)
+        if hit:
+            return True
+        # Commitment board: evaluate specs/photos before opting in (no row yet).
+        if design.get("status") == DESIGN_STATUS_SEEKING:
+            return True
+        # Logged-in manufacturer browsing the shop — same images as public catalog.
+        if _design_visible_in_shop_catalog(design):
+            return True
+        return False
     if role == "customer":
         if _design_visible_in_shop_catalog(design):
             return True
@@ -411,7 +420,8 @@ def get_design_media(
 
     Customers see and may download both listing preview and product-images gallery whenever access
     is allowed (same signed URLs as other roles). Access: catalog-visible design, or an existing
-    customer order for this design, or designer / committed manufacturer / admin.
+    customer order for this design, or designer / manufacturer (committed, seeking-commitment
+    board, or catalog-visible) / admin.
 
     Uses signed URLs for private bucket paths (TTL ``MEDIA_SIGNED_TTL``).
     Anonymous users: only when the design is visible on the public shop catalog.
