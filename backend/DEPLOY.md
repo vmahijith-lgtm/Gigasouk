@@ -174,6 +174,14 @@ For production, upgrade to the **Standard** plan ($7/mo) to keep the service alw
 
 ## Common Issues
 
+### Railway build: `pip` exit code 127
+
+**Symptom**: `process "... pip install --upgrade pip" did not complete successfully: exit code 127`
+
+**Cause**: Overriding Nixpacks `[phases.install]` with bare `pip` runs before the Python provider wires `pip` onto `PATH`.
+
+**Fix**: Keep only `[phases.setup]` `nixPkgs` in `nixpacks.toml` and let Nixpacks install `requirements.txt` automatically (do not replace the install phase with `pip …` commands).
+
 ### `cv2` ImportError on deploy
 
 **Symptom**: `ImportError: libGL.so.1: cannot open shared object file`

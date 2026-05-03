@@ -14,10 +14,8 @@
 # glib       → GThread (libgthread-2.0) — needed by OpenCV internals
 nixPkgs = ["libGL", "glib"]
 
-[phases.install]
-# pip install is auto-detected from requirements.txt.
-# Override here only if you need extra flags.
-cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
+# Do not override [phases.install]. A custom `pip install …` breaks Nixpacks’ Python
+# phase: `pip` is not on PATH yet (exit 127). requirements.txt is installed automatically.
 
 [start]
 # Overridden by railway.toml deploy.startCommand.
