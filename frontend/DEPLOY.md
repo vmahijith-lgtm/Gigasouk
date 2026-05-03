@@ -44,3 +44,11 @@ For **preview deployments** (`*.vercel.app`), either:
 - Sign in as each role and confirm dashboards load (`NEXT_PUBLIC_API_URL` must match a live Railway backend)
 
 See also: [backend/DEPLOY.md](../backend/DEPLOY.md) for Railway API deploy and webhooks.
+
+## Troubleshooting
+
+### `ENOENT` … `.next/routes-manifest.json` or doubled paths (`path1/path1`)
+
+Usually caused by **`outputFileTracingRoot`** pointing at the git repo parent while **Root Directory** is `frontend`. This repo’s `next.config.mjs` avoids that so `.next` stays under `frontend/`.
+
+Confirm **Root Directory** = `frontend`, Framework = **Next.js**, redeploy; clear build cache (**Deployments → … → Redeploy → Clear cache**) if needed.
