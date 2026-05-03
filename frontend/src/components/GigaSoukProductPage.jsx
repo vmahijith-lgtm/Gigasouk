@@ -7,6 +7,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { placeOrder, createPayment, verifyPayment } from "../lib/api";
+import { loadRazorpayCheckout } from "../lib/razorpay-checkout";
 
 const C = {
   bg: "#060810", card: "#0C1018", card2: "#111826", border: "#1A2230",
@@ -59,17 +60,15 @@ export default function GigaSoukProductPage({ customerId }) {
     try {
       const { data: orderData } = await placeOrder({
         design_id:        selected.id,
-        customer_id:      customerId,
         quantity:         1,
         delivery_address: addr,
       });
 
-      // Open Razorpay checkout
       const { data: payData } = await createPayment({
-        order_id:    orderData.order_id,
-        customer_id: customerId,
+        order_id: orderData.order_id,
       });
 
+      const Razorpay = await loadRazorpayCheckout();
       const options = {
         key:         payData.razorpay_key,
         amount:      payData.amount,
@@ -78,18 +77,22 @@ export default function GigaSoukProductPage({ customerId }) {
         name:        "GigaSouk",
         description: selected.title,
         handler: async (response) => {
-          await verifyPayment({
-            order_id:            orderData.order_id,
-            razorpay_order_id:   response.razorpay_order_id,
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_signature:  response.razorpay_signature,
-          });
-          setSelected(null);
-          setOrderMsg(`Order ${orderData.order_ref} placed! Your product is being made ${orderData.distance_km}km away.`);
+          try {
+            await verifyPayment({
+              order_id:            orderData.order_id,
+              razorpay_order_id:   response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature:  response.razorpay_signature,
+            });
+            setSelected(null);
+            setOrderMsg(`Order ${orderData.order_ref} placed! Your product is being made ${orderData.distance_km}km away.`);
+          } catch (verErr) {
+            setOrderMsg(verErr?.response?.data?.detail || "Payment could not be verified. Contact support with your order ref.");
+          }
         },
         theme: { color: C.green },
       };
-      const rzp = new window.Razorpay(options);
+      const rzp = new Razorpay(options);
       rzp.open();
     } catch (e) {
       setOrderMsg(e?.response?.data?.detail || "Order failed. Please try again.");

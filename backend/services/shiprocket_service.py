@@ -231,15 +231,10 @@ async def shiprocket_webhook(request: Request):
             "delivered_at": datetime.now(timezone.utc).isoformat(),
         })
 
-        # Trigger automatic escrow release
-        from services.razorpay_service import release_escrow
-        from pydantic import BaseModel
+        # Trigger automatic escrow release (no admin profile — webhook)
+        from services.razorpay_service import release_escrow_core
 
-        class _Req(BaseModel):
-            order_id: str
-            admin_id: str
-
-        await release_escrow(_Req(order_id=order["id"], admin_id="system_webhook"))
+        await release_escrow_core(order["id"], None)
 
     return {"received": True, "status": status, "order_ref": order.get("order_ref")}
 

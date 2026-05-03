@@ -115,7 +115,7 @@ export default function GigaSoukAdminPanel({ adminId, onSignOut }) {
   // ── Actions ──────────────────────────────────────────────────────
   async function handleRelease(orderId) {
     try {
-      await releaseEscrow({ order_id: orderId, admin_id: adminId });
+      await releaseEscrow({ order_id: orderId });
       flash("Escrow released successfully.");
       loadOrders("in_escrow");
     } catch (e) { flash(e?.response?.data?.detail || "Release failed.", "error"); }
@@ -124,7 +124,7 @@ export default function GigaSoukAdminPanel({ adminId, onSignOut }) {
   async function handleRefund(orderId) {
     if (!window.confirm("Refund this order? This cannot be undone.")) return;
     try {
-      await refundPayment({ order_id: orderId, admin_id: adminId, reason: "Admin refund" });
+      await refundPayment({ order_id: orderId, reason: "Admin refund" });
       flash("Refund issued.");
       loadOrders();
     } catch (e) { flash(e?.response?.data?.detail || "Refund failed.", "error"); }

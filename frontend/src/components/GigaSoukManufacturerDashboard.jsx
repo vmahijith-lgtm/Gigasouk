@@ -7,12 +7,13 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
-import { submitQC, updateOrderStatus } from "../lib/api";
+import { submitQC, updateOrderStatus, getMyCommitments, updateCommitmentShowcase } from "../lib/api";
 import { MACHINE_OPTIONS, MATERIAL_OPTIONS } from "../lib/workshop-tags";
 import GigaSoukCommitmentBoard from "./GigaSoukCommitmentBoard";
 import { ManufacturerOrderMap } from "./MapComponents";
 import LocationPicker from "./LocationPicker";
 import NegotiationList from "./NegotiationList";
+import DesignMediaGallery from "./DesignMediaGallery";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -77,6 +78,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
   const [profileFlash, setProfileFlash] = useState("");
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
+  const [showcaseBusy, setShowcaseBusy] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [commitments, setCommitments] = useState([]);
   const [payouts, setPayouts] = useState([]);
@@ -101,23 +103,17 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        const [meRes, jRes, commRes, oIdsRes] = await Promise.all([
+        const [meRes, jRes, commList, oIdsRes] = await Promise.all([
           token
             ? fetch(`${API_BASE}/api/auth/me`, {
               headers: { Authorization: `Bearer ${token}` },
             }).then(r => (r.ok ? r.json() : null))
             : Promise.resolve(null),
-          supabase.from("orders").select("*, designs(title, cad_file_url, preview_image_url), qc_records(*)")
+          supabase.from("orders").select("id, design_id, order_ref, status, payment_status, commitment_id, locked_price, committed_price, shiprocket_awb, tracking_url, created_at, delivery_address, designs(title, cad_file_url, preview_image_url), qc_records(*)")
             .eq("manufacturer_id", manufacturerId)
-            .not("status", "in", '("delivered","cancelled","refunded")')
+            .not("status", "in", "(delivered,cancelled,refunded)")
             .order("created_at", { ascending: false }),
-          supabase
-            .from("manufacturer_commitments")
-            .select(
-              "id, design_id, committed_price, base_price, region_city, region_state, status, committed_at, notes, designs(title, preview_image_url, cad_file_url)"
-            )
-            .eq("manufacturer_id", manufacturerId)
-            .order("committed_at", { ascending: false }),
+          token ? getMyCommitments().then(r => r.data).catch(() => []) : Promise.resolve([]),
           supabase.from("orders").select("id").eq("manufacturer_id", manufacturerId),
         ]);
 
@@ -140,7 +136,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         setMachinesDraft([...(m.machine_types || [])]);
         setMaterialsDraft([...(m.materials || [])]);
         setJobs(jRes.data || []);
-        setCommitments(commRes.data || []);
+        setCommitments(Array.isArray(commList) ? commList : []);
         setPayouts(payoutRows);
       } finally {
         setLoading(false);
@@ -159,6 +155,41 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
   }
   function toggleMaterialTag(m) {
     setMaterialsDraft(prev => (prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]));
+  }
+
+  async function handleShowcaseUpload(commitment, fileList) {
+    if (!fileList?.length) return;
+    setShowcaseBusy(commitment.id);
+    setProfileFlash("");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        setProfileFlash("Sign in to upload.");
+        return;
+      }
+      const newPaths = [];
+      for (const file of Array.from(fileList)) {
+        const raw = file.name.split(".").pop() || "jpg";
+        const ext = raw.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8) || "jpg";
+        const path = `${user.id}/showcase/${commitment.id}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage.from("product-images").upload(path, file, {
+          cacheControl: "31536000",
+          upsert: false,
+          contentType: file.type || "image/jpeg",
+        });
+        if (error) throw error;
+        newPaths.push(path);
+      }
+      const merged = [...(commitment.showcase_image_urls || []), ...newPaths];
+      await updateCommitmentShowcase(commitment.id, merged);
+      setJobsRefreshKey(k => k + 1);
+      setProfileFlash("Workshop photos saved. Customers see them with this design.");
+    } catch (e) {
+      const detail = e?.response?.data?.detail || e?.message || "";
+      setProfileFlash(detail || "Upload failed.");
+    } finally {
+      setShowcaseBusy(null);
+    }
   }
 
   async function saveWorkshopCapabilities() {
@@ -596,7 +627,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
           gap: 10, marginBottom: 24
         }}>
           {[
-            { label: "Active Jobs", val: jobs.length, color: C.blue },
+            { label: "Active Jobs", val: workQueue.length, color: C.blue },
             { label: "QC Ready", val: qcReadyJobs.length, color: C.gold },
             { label: "Rating", val: `${mfr.rating || "—"} ★`, color: C.green },
             { label: "Total Earned", val: `₹${totalEarnings.toLocaleString("en-IN")}`, color: C.purple },
@@ -753,6 +784,56 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                         When a customer orders this design routed to you, the full job (CAD, manufacturing steps) appears
                         as a <strong style={{ color: C.t2 }}>customer order</strong> above or replaces this card.
                       </p>
+                      <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: C.t2, marginBottom: 6 }}>
+                          Workshop / product photos
+                        </p>
+                        <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.45 }}>
+                          Add photos of your facility or sample parts. Stored under your account; same full-quality viewing as the designer gallery.
+                        </p>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          id={`showcase-${c.id}`}
+                          style={{ display: "none" }}
+                          onChange={e => {
+                            handleShowcaseUpload(c, e.target.files);
+                            e.target.value = "";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={showcaseBusy === c.id}
+                          onClick={() => document.getElementById(`showcase-${c.id}`)?.click()}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: 8,
+                            border: `1px solid ${C.green}66`,
+                            background: C.green + "18",
+                            color: C.green,
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: showcaseBusy === c.id ? "wait" : "pointer",
+                          }}
+                        >
+                          {showcaseBusy === c.id ? "Uploading…" : "Add photos"}
+                        </button>
+                        {(c.showcase_image_urls || []).length > 0 && (
+                          <p style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+                            {(c.showcase_image_urls || []).length} workshop photo(s) saved
+                          </p>
+                        )}
+                        {c.design_id ? (
+                          <div style={{ marginTop: 12 }}>
+                            <DesignMediaGallery
+                              designId={c.design_id}
+                              title={c.designs?.title}
+                              onlyCommitmentId={c.id}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1025,12 +1106,30 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
             background: C.card, border: `1px solid ${C.green}`, borderRadius: 10,
             padding: "20px 24px", marginBottom: 20
           }}>
-            <p style={{ fontSize: 12, color: C.t3 }}>TOTAL EARNED</p>
+            <p style={{ fontSize: 12, color: C.t3 }}>TOTAL EARNED (released payouts)</p>
             <p style={{ fontSize: 32, fontWeight: 800, color: C.green }}>
               ₹{totalEarnings.toLocaleString("en-IN")}
             </p>
+            <p style={{ fontSize: 11, color: C.t3, marginTop: 10, lineHeight: 1.45 }}>
+              Customer payments run through Razorpay (escrow). You receive net amounts here after delivery triggers release. Shiprocket keys stay on the server only.
+            </p>
           </div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Payout History</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Active jobs · payment status</h3>
+          <p style={{ fontSize: 12, color: C.t3, marginBottom: 10 }}>
+            in_escrow = customer paid, funds held. pending = not paid yet. released = payout recorded below.
+          </p>
+          {jobs.length === 0 && <p style={{ color: C.t3, fontSize: 13, marginBottom: 16 }}>No active jobs.</p>}
+          {jobs.slice(0, 20).map(j => (
+            <div key={j.id} style={{
+              background: C.card2, border: `1px solid ${C.border}`,
+              borderRadius: 8, padding: "10px 14px", marginBottom: 8,
+              display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
+            }}>
+              <span style={{ fontSize: 13 }}>{j.order_ref}</span>
+              <span style={{ fontSize: 11, color: C.t3 }}>{j.payment_status || "pending"}</span>
+            </div>
+          ))}
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12, marginTop: 20 }}>Payout history</h3>
           {payouts.length === 0 && <p style={{ color: C.t3 }}>No payouts yet.</p>}
           {payouts.map(p => (
             <div key={p.id} style={{

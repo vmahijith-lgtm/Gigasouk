@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../lib/auth-context";
 import { getCatalogDesigns } from "../lib/api";
 import type { DeliveryAddress } from "../components/MapComponents";
+import DesignMediaGallery from "../components/DesignMediaGallery";
 
 // Lazy-load the map (heavy Google Maps SDK)
 const FactoryFinderMap = lazy(() => import("../components/FactoryFinderMap"));
@@ -94,30 +95,39 @@ export default function HomePage() {
     setOrdering(true);
     try {
       const { placeOrder, createPayment, verifyPayment } = await import("../lib/api");
+      const { loadRazorpayCheckout } = await import("../lib/razorpay-checkout");
       const { data: od } = await placeOrder({
         design_id:        selected!.id,
-        customer_id:      user.profileId,
         quantity:         1,
         delivery_address: address,
-        commitment_id:    factory.commitment_id, // honour the customer's map choice
+        commitment_id:    factory.commitment_id,
       });
-      const { data: pd } = await createPayment({ order_id:od.order_id, customer_id:user.profileId });
+      const { data: pd } = await createPayment({ order_id: od.order_id });
+      const Razorpay = await loadRazorpayCheckout();
       const opts = {
-        key:pd.razorpay_key, amount:pd.amount, currency:"INR",
-        order_id:pd.razorpay_order_id, name:"GigaSouk", description:selected!.title,
-        handler: async (r:any) => {
-          await verifyPayment({
-            order_id:od.order_id,
-            razorpay_order_id:r.razorpay_order_id,
-            razorpay_payment_id:r.razorpay_payment_id,
-            razorpay_signature:r.razorpay_signature,
-          });
-          setSelected(null);
-          setOrderMsg(`✓ Order ${od.order_ref} placed! Factory in ${factory.city} (${od.distance_km}km away)`);
+        key: pd.razorpay_key,
+        amount: pd.amount,
+        currency: "INR",
+        order_id: pd.razorpay_order_id,
+        name: "GigaSouk",
+        description: selected!.title,
+        handler: async (r: any) => {
+          try {
+            await verifyPayment({
+              order_id: od.order_id,
+              razorpay_order_id: r.razorpay_order_id,
+              razorpay_payment_id: r.razorpay_payment_id,
+              razorpay_signature: r.razorpay_signature,
+            });
+            setSelected(null);
+            setOrderMsg(`✓ Order ${od.order_ref} placed! Factory in ${factory.city} (${od.distance_km}km away)`);
+          } catch {
+            setOrderMsg("Payment could not be verified. If money was debited, contact support with your order ref.");
+          }
         },
-        theme:{ color:T.green },
+        theme: { color: T.green },
       };
-      new (window as any).Razorpay(opts).open();
+      new Razorpay(opts).open();
     } catch(e:any) {
       setOrderMsg(e?.response?.data?.detail || "Order failed. Try again.");
     } finally {
@@ -266,8 +276,8 @@ export default function HomePage() {
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16}}>
             {[
               {n:"01",icon:"✏️",title:"Designer uploads",body:"A designer uploads a CAD file and sets a royalty price."},
-              {n:"02",icon:"🏭",title:"Factories commit",body:"Nearby MSME factories commit to manufacture it. One commitment unlocks publishing."},
-              {n:"03",icon:"🗺️",title:"Pick your factory",body:"The product goes live. Enter your pincode and choose a factory on the map."},
+              {n:"02",icon:"🏭",title:"Factories commit",body:"Nearby MSME factories commit to manufacture it. The designer then publishes when it goes on sale."},
+              {n:"03",icon:"🗺️",title:"Pick your factory",body:"After the designer publishes, enter your pincode and choose a factory on the map."},
               {n:"04",icon:"🤖",title:"AI quality check",body:"Factory uploads 5 photos. OpenCV verifies dimensions to ±0.5mm."},
               {n:"05",icon:"🚚",title:"Ships to you",body:"Pass QC → auto-ship via Shiprocket. Track in real-time."},
               {n:"06",icon:"🔒",title:"Escrow releases",body:"On delivery, Razorpay splits fees to designer, factory & platform."},
@@ -428,6 +438,8 @@ export default function HomePage() {
             overflowY:"auto"}}>
           <div onClick={e=>e.stopPropagation()}
             style={{width:"100%",maxWidth:580}}>
+
+            <DesignMediaGallery designId={selected.id} title={selected.title} panel />
 
             {!user ? (
               /* Not signed in */

@@ -8,8 +8,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
-import { getCatalogDesigns, updatePreferredDelivery } from "../../lib/api";
+import { getCatalogDesigns, updatePreferredDelivery, createPayment, verifyPayment } from "../../lib/api";
+import { loadRazorpayCheckout } from "../../lib/razorpay-checkout";
 import { AddressAutocomplete, type DeliveryAddress } from "../../components/MapComponents";
+import DesignMediaGallery from "../../components/DesignMediaGallery";
 
 const T = {
   bg: "#060810", card: "#0C1018", border: "#1A2230",
@@ -24,6 +26,10 @@ export default function CustomerDashboardPage() {
   const [loadOrders, setLoadOrders] = useState(true);
   const [locMsg, setLocMsg] = useState("");
   const [savingLoc, setSavingLoc] = useState(false);
+  const [payMsg, setPayMsg] = useState("");
+  const [payingId, setPayingId] = useState<string | null>(null);
+  /** Expand inline full-quality gallery for one order (lazy: single GET /media when opened). */
+  const [orderPhotosFor, setOrderPhotosFor] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -43,7 +49,7 @@ export default function CustomerDashboardPage() {
       const [{ data: od }, catRes] = await Promise.all([
         supabase
           .from("orders")
-          .select("id, order_ref, status, created_at, designs(title), locked_price, committed_price")
+          .select("id, design_id, order_ref, status, payment_status, created_at, negotiation_room_id, designs(title), locked_price, committed_price")
           .eq("customer_id", user.profileId)
           .order("created_at", { ascending: false })
           .limit(25),
@@ -54,6 +60,71 @@ export default function CustomerDashboardPage() {
       setLoadOrders(false);
     })();
   }, [user?.profileId]);
+
+  function paymentLabel(o: { payment_status?: string; locked_price?: number | null }) {
+    const ps = o.payment_status || "pending";
+    if (ps === "refunded") return { text: "Refunded", color: "#F87171" };
+    if (ps === "released") return { text: "Paid · released", color: T.green };
+    if (ps === "in_escrow") return { text: "Paid · in escrow", color: T.green };
+    if (ps === "pending" && o.locked_price != null && Number(o.locked_price) > 0) {
+      return { text: "Pay now", color: T.gold };
+    }
+    return { text: "Awaiting price lock", color: T.t3 };
+  }
+
+  async function payOrder(o: { id: string; order_ref: string; designs?: { title?: string } }) {
+    setPayMsg("");
+    setPayingId(o.id);
+    try {
+      const { data: payData } = await createPayment({ order_id: o.id });
+      const Razorpay = await loadRazorpayCheckout();
+      const options = {
+        key: payData.razorpay_key,
+        amount: payData.amount,
+        currency: "INR",
+        order_id: payData.razorpay_order_id,
+        name: "GigaSouk",
+        description: o.designs?.title || o.order_ref,
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            await verifyPayment({
+              order_id: o.id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            setPayMsg(`Payment received for ${o.order_ref}.`);
+            const { data: od } = await supabase
+              .from("orders")
+              .select("id, design_id, order_ref, status, payment_status, created_at, negotiation_room_id, designs(title), locked_price, committed_price")
+              .eq("customer_id", user!.profileId)
+              .order("created_at", { ascending: false })
+              .limit(25);
+            setOrders(od || []);
+          } catch (e: unknown) {
+            const detail = e && typeof e === "object" && "response" in e
+              ? (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
+              : undefined;
+            setPayMsg(detail || "Verification failed. If money was debited, contact support with your order ref.");
+          }
+        },
+        theme: { color: T.green },
+      };
+      const rzp = new Razorpay(options);
+      rzp.open();
+    } catch (e: unknown) {
+      const detail = e && typeof e === "object" && "response" in e
+        ? (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        : undefined;
+      setPayMsg(detail || "Could not start payment. If Razorpay is not configured on the server, add keys to the backend environment.");
+    } finally {
+      setPayingId(null);
+    }
+  }
 
   async function savePreferred(addr: DeliveryAddress) {
     if (!user) return;
@@ -124,34 +195,110 @@ export default function CustomerDashboardPage() {
 
         {/* Orders */}
         <section style={{ marginBottom: 28 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>Your orders</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>Your orders and payments</h2>
+          <p style={{ fontSize: 12, color: T.t3, marginBottom: 12, lineHeight: 1.5 }}>
+            Pay with UPI or card via Razorpay after your price is locked in negotiation. The publishable key comes from the server; secrets never appear in the browser.
+          </p>
+          {payMsg && (
+            <p style={{ fontSize: 13, color: payMsg.startsWith("Payment received") ? T.green : "#F87171", marginBottom: 12 }}>
+              {payMsg}
+            </p>
+          )}
           {loadOrders && <p style={{ color: T.t3 }}>Loading orders…</p>}
           {!loadOrders && orders.length === 0 && (
             <p style={{ color: T.t3, fontSize: 14 }}>No orders yet. Browse the catalog on the home page.</p>
           )}
-          {!loadOrders && orders.map((o) => (
-            <div
-              key={o.id}
-              style={{
-                background: T.card,
-                border: `1px solid ${T.border}`,
-                borderRadius: 10,
-                padding: "14px 18px",
-                marginBottom: 10,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 10,
-              }}
-            >
-              <div>
-                <p style={{ fontWeight: 700 }}>{o.order_ref}</p>
-                <p style={{ fontSize: 12, color: T.t3 }}>{o.designs?.title}</p>
+          {!loadOrders && orders.map((o) => {
+            const pl = paymentLabel(o);
+            const canPay =
+              o.payment_status === "pending" &&
+              o.locked_price != null &&
+              Number(o.locked_price) > 0;
+            const photosOpen = orderPhotosFor === o.id;
+            return (
+              <div
+                key={o.id}
+                style={{
+                  background: T.card,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 10,
+                  padding: "14px 18px",
+                  marginBottom: 10,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 10,
+                  }}
+                >
+                  <div>
+                    <p style={{ fontWeight: 700 }}>{o.order_ref}</p>
+                    <p style={{ fontSize: 12, color: T.t3 }}>{o.designs?.title}</p>
+                    <p style={{ fontSize: 11, color: pl.color, marginTop: 4 }}>{pl.text}</p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: T.gold }}>{o.status}</span>
+                    {o.design_id && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOrderPhotosFor(photosOpen ? null : o.id)
+                        }
+                        style={{
+                          background: "transparent",
+                          border: `1px solid ${T.border}`,
+                          borderRadius: 8,
+                          padding: "6px 12px",
+                          fontWeight: 600,
+                          fontSize: 12,
+                          color: T.green,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {photosOpen ? "Hide photos" : "Photos"}
+                      </button>
+                    )}
+                    {canPay && (
+                      <button
+                        type="button"
+                        disabled={payingId === o.id}
+                        onClick={() => payOrder(o)}
+                        style={{
+                          background: T.green,
+                          color: "#060810",
+                          border: "none",
+                          borderRadius: 8,
+                          padding: "8px 14px",
+                          fontWeight: 700,
+                          fontSize: 12,
+                          cursor: payingId === o.id ? "wait" : "pointer",
+                        }}
+                      >
+                        {payingId === o.id ? "Opening…" : "Pay now"}
+                      </button>
+                    )}
+                    {o.negotiation_room_id && o.status === "negotiating" && (
+                      <Link
+                        href={`/negotiate/${o.negotiation_room_id}`}
+                        style={{ fontSize: 12, color: T.green, fontWeight: 600 }}
+                      >
+                        Negotiate
+                      </Link>
+                    )}
+                  </div>
+                </div>
+                {photosOpen && o.design_id && (
+                  <div style={{ marginTop: 14, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+                    <DesignMediaGallery designId={o.design_id} title={o.designs?.title} />
+                  </div>
+                )}
               </div>
-              <span style={{ fontSize: 12, color: T.gold }}>{o.status}</span>
-            </div>
-          ))}
+            );
+          })}
         </section>
 
         {/* Designs with supply */}

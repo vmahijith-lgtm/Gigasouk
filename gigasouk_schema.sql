@@ -10,6 +10,11 @@
 --   Done. All tables, enums, indexes, triggers, RLS policies,
 --   utility functions, and realtime config are created.
 --   Re-running this file on an existing database is fully safe.
+--
+--   Optional but recommended: run migrations/cascade_delete_on_auth_user.sql
+--   (FK CASCADE + BEFORE DELETE trigger + Storage cleanup). For legacy rows left
+--   after users were deleted earlier, run once:
+--     SELECT public.gigasouk_purge_orphan_user_data();
 -- ════════════════════════════════════════════════════════════════
 
 
@@ -146,7 +151,7 @@ CREATE TABLE IF NOT EXISTS designers (
 
 CREATE TABLE IF NOT EXISTS designs (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    designer_id         UUID NOT NULL REFERENCES profiles(id),
+    designer_id         UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     title               TEXT NOT NULL,
     description         TEXT,
     category            TEXT,
@@ -156,6 +161,7 @@ CREATE TABLE IF NOT EXISTS designs (
     royalty_percent     NUMERIC(5, 2) NOT NULL DEFAULT 15,
     cad_file_url        TEXT,
     preview_image_url   TEXT,
+    gallery_image_urls  TEXT[] NOT NULL DEFAULT '{}',
     thumbnail_url       TEXT,
     spec_sheet_url      TEXT,
     dimensions_mm       JSONB,
@@ -182,6 +188,7 @@ CREATE TABLE IF NOT EXISTS manufacturer_commitments (
     region_state        TEXT NOT NULL,
     status              commitment_status NOT NULL DEFAULT 'active',
     notes               TEXT,
+    showcase_image_urls TEXT[] NOT NULL DEFAULT '{}',
     approved_at         TIMESTAMPTZ,
     committed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -227,7 +234,7 @@ CREATE TABLE IF NOT EXISTS commitment_broadcasts (
 CREATE TABLE IF NOT EXISTS orders (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_ref               TEXT UNIQUE NOT NULL,
-    design_id               UUID NOT NULL REFERENCES designs(id),
+    design_id               UUID NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
     customer_id             UUID NOT NULL REFERENCES profiles(id),
     manufacturer_id         UUID NOT NULL REFERENCES manufacturers(id),
     commitment_id           UUID REFERENCES manufacturer_commitments(id),
@@ -895,6 +902,20 @@ DO $$ BEGIN
         SELECT 1 FROM pg_publication_tables
         WHERE pubname = 'supabase_realtime' AND tablename = 'manufacturer_commitments'
     ) THEN ALTER PUBLICATION supabase_realtime ADD TABLE manufacturer_commitments; END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime' AND tablename = 'designs'
+    ) THEN ALTER PUBLICATION supabase_realtime ADD TABLE designs; END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime' AND tablename = 'regional_price_variants'
+    ) THEN ALTER PUBLICATION supabase_realtime ADD TABLE regional_price_variants; END IF;
 END $$;
 
 

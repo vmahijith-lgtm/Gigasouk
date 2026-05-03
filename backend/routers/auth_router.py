@@ -9,7 +9,7 @@ import uuid
 import logging
 from typing import Optional, List
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Query
 
 from db import db_admin, get_one
 
@@ -534,6 +534,33 @@ def get_me(authorization: Optional[str] = Header(None)):
         "manufacturer_id": manufacturer.get("id") if manufacturer else None,
         "designer_id":     designer.get("id") if designer else None,
     }
+
+
+@router.get("/me/wallet-transactions")
+def get_wallet_transactions(
+    authorization: Optional[str] = Header(None),
+    limit: int = Query(100, ge=1, le=200),
+):
+    """Wallet ledger rows for the authenticated profile only (service role)."""
+    payload = verify_jwt(authorization)
+    auth_uid = payload.get("sub")
+    if not auth_uid:
+        raise HTTPException(401, "Invalid token")
+
+    profile = get_one("profiles", {"auth_id": auth_uid})
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+
+    lim = min(max(limit, 1), 200)
+    res = (
+        db_admin.table("wallet_txns")
+        .select("id, amount, txn_type, source_ref, balance_after, created_at")
+        .eq("profile_id", profile["id"])
+        .order("created_at", desc=True)
+        .limit(lim)
+        .execute()
+    )
+    return {"transactions": res.data or []}
 
 
 class PreferredDeliveryBody(BaseModel):

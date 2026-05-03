@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { getWalletTransactions } from "../lib/api";
 import GigaSoukStagingArea from "./GigaSoukStagingArea";
 import NegotiationList from "./NegotiationList";
 
@@ -47,7 +48,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        const [meRes, sRes, oRes, wRes] = await Promise.all([
+        const [meRes, sRes, oRes, txnPack] = await Promise.all([
           token
             ? fetch(`${API_BASE}/api/auth/me`, {
               headers: { Authorization: `Bearer ${token}` },
@@ -56,18 +57,19 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
           supabase.rpc("get_designer_stats", { p_designer_id: designerId }),
           // Orders for designs owned by this designer
           supabase.from("orders")
-            .select("*, designs!inner(title, designer_id)")
+            .select("id, order_ref, status, payment_status, locked_price, committed_price, created_at, designs!inner(title, designer_id)")
             .eq("designs.designer_id", designerId)
             .order("created_at", { ascending: false }).limit(20),
-          supabase.from("wallet_txns").select("*").eq("profile_id", designerId)
-            .order("created_at", { ascending: false }).limit(30),
+          token
+            ? getWalletTransactions(40).then(r => r.data?.transactions || [])
+            : Promise.resolve([]),
         ]);
 
         const me = meRes?.profile || {};
         setProfile(me);
         setStats(sRes.data?.[0] || {});
         setOrders(oRes.data || []);
-        setTxns(wRes.data || []);
+        setTxns(txnPack || []);
         setWallet(me.wallet_balance || 0);
       } finally {
         setLoading(false);
@@ -225,6 +227,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
               <div style={{ textAlign: "right" }}>
                 <p style={{ fontWeight: 700, color: C.green }}>₹{Number(o.locked_price || o.committed_price).toLocaleString("en-IN")}</p>
                 <span style={{ fontSize: 11, color: statusColor[o.status] || C.t3 }}>{o.status}</span>
+                <p style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>Payment: {o.payment_status || "pending"}</p>
               </div>
             </div>
           ))}
@@ -250,8 +253,11 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
             <p style={{ fontSize: 32, fontWeight: 800, color: C.green }}>
               ₹{Number(wallet).toLocaleString("en-IN")}
             </p>
+            <p style={{ fontSize: 11, color: C.t3, marginTop: 10, lineHeight: 1.45 }}>
+              Royalties credit here after customer payment clears escrow on delivery. Transaction list is loaded via your authenticated session only (no third-party access).
+            </p>
           </div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Transaction History</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Transaction history</h3>
           {txns.map(t => (
             <div key={t.id} style={{
               background: C.card, border: `1px solid ${C.border}`,

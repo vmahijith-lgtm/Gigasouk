@@ -7,7 +7,8 @@
 import math
 import uuid
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Optional
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel
 
 from db import db_admin, get_one, safe_update
@@ -26,6 +27,7 @@ from services.notify_service import (
     notify_customer_order_confirmed,
     notify_designer_order_placed,
 )
+from routers.auth_router import verify_jwt
 
 router = APIRouter()
 
@@ -36,7 +38,6 @@ router = APIRouter()
 
 class PlaceOrderRequest(BaseModel):
     design_id:        str
-    customer_id:      str
     quantity:         int
     delivery_address: dict   # {line1, city, state, pincode, lat, lng}
     notes:            str = ""
@@ -270,12 +271,22 @@ def catalog_designs():
 # ════════════════════════════════════════════════════════════════
 
 @router.post("/orders")
-async def place_order(req: PlaceOrderRequest, bg: BackgroundTasks):
+async def place_order(
+    req: PlaceOrderRequest,
+    bg: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+):
     """
     Customer places an order when at least one manufacturer has committed.
-    Routes to the committed manufacturer nearest to the delivery coordinates
-    (shortest distance); honours commitment_id when the customer picked one on the map.
+    Customer identity comes from the JWT only (cannot spoof customer_id).
     """
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+    if profile.get("role") != "customer":
+        raise HTTPException(403, "Only customers can place orders")
+    customer_id = profile["id"]
 
     # ── Validate design ─────────────────────────────────────────
     design = get_one("designs", {"id": req.design_id})
@@ -322,7 +333,7 @@ async def place_order(req: PlaceOrderRequest, bg: BackgroundTasks):
         "id":               order_id,
         "order_ref":        order_ref,
         "design_id":        req.design_id,
-        "customer_id":      req.customer_id,
+        "customer_id":      customer_id,
         "manufacturer_id":  manufacturer_id,
         "commitment_id":    best["id"],
         "quantity":         req.quantity,
@@ -357,7 +368,7 @@ async def place_order(req: PlaceOrderRequest, bg: BackgroundTasks):
     # ── Fire notifications in background ─────────────────────────
     bg.add_task(notify_manufacturer_new_order, manufacturer_id, order_ref, design["title"])
     bg.add_task(notify_designer_order_placed,  design["designer_id"], order_ref)
-    bg.add_task(notify_customer_order_confirmed, req.customer_id, order_ref, best["distance_km"])
+    bg.add_task(notify_customer_order_confirmed, customer_id, order_ref, best["distance_km"])
 
     return {
         "order_id":     order_id,

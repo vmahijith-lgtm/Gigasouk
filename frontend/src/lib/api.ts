@@ -29,6 +29,9 @@ export const getCatalogDesigns = () => api.get("/api/v1/catalog/designs");
 export const updatePreferredDelivery = (data: object) =>
   api.patch("/api/auth/me/preferred-delivery", data);
 
+export const getWalletTransactions = (limit = 100) =>
+  api.get("/api/auth/me/wallet-transactions", { params: { limit } });
+
 // ── Orders ────────────────────────────────────────────────────────
 export const placeOrder        = (data: object)         => api.post("/api/v1/orders", data);
 export const getOrder          = (orderId: string)      => api.get(`/api/v1/orders/${orderId}`);
@@ -49,7 +52,9 @@ export const seekCommitments      = (data: object)      => api.post("/api/v1/des
 export const createCommitment     = (data: object)      => api.post("/api/v1/commitments", data);
 export const reviewVariant        = (data: object)      => api.post("/api/v1/commitments/variants/review", data);
 export const getAvailableDesigns  = (mfrId: string)     => api.get("/api/v1/commitments/available", { params: { manufacturer_id: mfrId } });
-export const getMyCommitments     = (mfrId: string)     => api.get("/api/v1/commitments/mine", { params: { manufacturer_id: mfrId } });
+/** Requires manufacturer JWT; server resolves manufacturer row — do not pass spoofable ids */
+export const getMyCommitments = () => api.get("/api/v1/commitments/mine");
+/** Designer-only: backend requires role=designer + JWT. Manufacturers cannot publish. */
 export const publishDesign        = (designId: string, designerId: string) =>
   api.post(`/api/v1/designs/${designId}/publish`, { designer_id: designerId });
 export const pauseDesign          = (designId: string, data: object) =>
@@ -62,14 +67,36 @@ export const getDesignerDesigns = (designerId: string)  =>
 export const createDesign       = (data: object)        => api.post("/api/v1/designs", data);
 export const updateDesign       = (designId: string, data: object) =>
   api.patch(`/api/v1/designs/${designId}`, data);
+/** Signed URLs for preview + designer gallery + manufacturer showcases (full quality). */
+export const getDesignMedia = (designId: string) =>
+  api.get(`/api/v1/designs/${designId}/media`);
+export const updateDesignGallery = (
+  designId: string,
+  designerId: string,
+  gallery_image_urls: string[],
+) =>
+  api.patch(`/api/v1/designs/${designId}/gallery`, { designer_id: designerId, gallery_image_urls });
+export const updateCommitmentShowcase = (
+  commitmentId: string,
+  showcase_image_urls: string[],
+) =>
+  api.patch(`/api/v1/commitments/${commitmentId}/showcase`, { showcase_image_urls });
 export const deleteDesign       = (designId: string, designerId: string) =>
   api.delete(`/api/v1/designs/${designId}`, { params: { designer_id: designerId } });
 
-// ── Payments ──────────────────────────────────────────────────────
-export const createPayment  = (data: object)            => api.post("/api/v1/payments/create", data);
-export const verifyPayment  = (data: object)            => api.post("/api/v1/payments/verify", data);
-export const releaseEscrow  = (data: object)            => api.post("/api/v1/payments/release", data);
-export const refundPayment  = (data: object)            => api.post("/api/v1/payments/refund", data);
+// ── Payments (JWT identifies customer/admin — never send spoofable ids) ──
+export const createPayment = (data: { order_id: string }) =>
+  api.post("/api/v1/payments/create", data);
+export const verifyPayment = (data: {
+  order_id: string;
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}) => api.post("/api/v1/payments/verify", data);
+export const releaseEscrow = (data: { order_id: string }) =>
+  api.post("/api/v1/payments/release", data);
+export const refundPayment = (data: { order_id: string; reason?: string }) =>
+  api.post("/api/v1/payments/refund", data);
 
 // ── QC ────────────────────────────────────────────────────────────
 export const submitQC       = (data: object)            => api.post("/api/v1/qc/submit", data);

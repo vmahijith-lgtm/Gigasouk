@@ -27,6 +27,7 @@ from db import db_admin, get_one, safe_update
 from config import (
     DESIGN_STATUS_DRAFT,
     DESIGN_STATUS_PAUSED,
+    DESIGN_STATUS_LIVE,
 )
 from routers.auth_router import verify_jwt   # reuse shared JWT helper
 
@@ -34,6 +35,8 @@ router = APIRouter()
 
 CAD_BUCKET    = "cad-files"
 CAD_URL_TTL   = 3600   # 60 minutes
+PRODUCT_IMAGES_BUCKET = "product-images"
+MEDIA_SIGNED_TTL = 7200  # 2h — full-quality image view/download
 
 
 # ════════════════════════════════════════════════════════════════
@@ -70,6 +73,12 @@ class UpdateDesignRequest(BaseModel):
     tolerance_mm:       Optional[float] = None
 
 
+class DesignGalleryRequest(BaseModel):
+    """Storage paths in `product-images` (or legacy https URLs). Paths must be under the uploader's auth folder."""
+    designer_id:          str
+    gallery_image_urls:   List[str]
+
+
 # ════════════════════════════════════════════════════════════════
 # HELPER: extract storage path from a Supabase Storage URL
 # The URL format is:
@@ -91,6 +100,76 @@ def _extract_cad_path(cad_file_url: str) -> str:
         return cad_file_url.split(marker2, 1)[1].split("?")[0]
     # Assume it is already a bare path (our preferred storage convention)
     return cad_file_url
+
+
+def _design_visible_in_shop_catalog(design: dict) -> bool:
+    """Same visibility rule as homepage catalog (live or at least one commitment)."""
+    st = design.get("status")
+    if st in (DESIGN_STATUS_DRAFT, DESIGN_STATUS_PAUSED):
+        return False
+    if st == DESIGN_STATUS_LIVE:
+        return True
+    return (design.get("active_commit_count") or 0) >= 1
+
+
+def _sign_bucket_path(bucket: str, path: str) -> str:
+    path = (path or "").strip()
+    if not path:
+        return ""
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    try:
+        response = db_admin.storage.from_(bucket).create_signed_url(path, MEDIA_SIGNED_TTL)
+        signed = (
+            response.get("signedURL")
+            or response.get("signed_url")
+            or response.get("data", {}).get("signedURL", "")
+        )
+        if not signed:
+            raise ValueError(f"Empty signed URL: {response}")
+        return signed
+    except Exception as e:
+        raise HTTPException(500, f"Could not sign storage URL: {e}") from e
+
+
+def _can_access_design_media(design: dict, profile: Optional[dict]) -> bool:
+    """Who may fetch signed URLs for gallery + showcase images."""
+    if not profile:
+        return _design_visible_in_shop_catalog(design)
+
+    role = profile.get("role")
+    if role == "admin":
+        return True
+    if role == "designer" and design.get("designer_id") == profile["id"]:
+        return True
+    if role == "manufacturer":
+        mfr = get_one("manufacturers", {"profile_id": profile["id"]})
+        if not mfr:
+            return False
+        hit = (
+            db_admin.table("manufacturer_commitments")
+            .select("id")
+            .eq("design_id", design["id"])
+            .eq("manufacturer_id", mfr["id"])
+            .limit(1)
+            .execute()
+            .data
+        )
+        return bool(hit)
+    if role == "customer":
+        if _design_visible_in_shop_catalog(design):
+            return True
+        ord_hit = (
+            db_admin.table("orders")
+            .select("id")
+            .eq("customer_id", profile["id"])
+            .eq("design_id", design["id"])
+            .limit(1)
+            .execute()
+            .data
+        )
+        return bool(ord_hit)
+    return False
 
 
 # ════════════════════════════════════════════════════════════════
@@ -278,6 +357,177 @@ def delete_design(
 
     db_admin.table("designs").delete().eq("id", design_id).execute()
     return {"deleted": True, "design_id": design_id}
+
+
+# ════════════════════════════════════════════════════════════════
+# ENDPOINT: PREVIEW + GALLERY + SHOWCASE IMAGES (signed URLs, full quality)
+# GET /api/v1/designs/{design_id}/media
+# ════════════════════════════════════════════════════════════════
+
+def _preview_display_url(preview: str) -> str:
+    p = (preview or "").strip()
+    if not p:
+        return ""
+    if p.startswith("http://") or p.startswith("https://"):
+        return p
+    return _sign_bucket_path("design-previews", p)
+
+
+def _preview_source_bucket(preview_raw: str) -> str:
+    """Labels preview provenance for API clients (shop listing = design-previews bucket)."""
+    p = (preview_raw or "").strip()
+    if not p:
+        return ""
+    if p.startswith("http://") or p.startswith("https://"):
+        if "design-previews" in p:
+            return "design-previews"
+        return "external"
+    return "design-previews"
+
+
+def _gallery_item_dict(path: str, signed_url: str) -> dict:
+    p = (path or "").strip()
+    fn = p.rsplit("/", 1)[-1]
+    if p.startswith("http://") or p.startswith("https://"):
+        return {"path": p, "url": signed_url, "filename": fn, "source_bucket": "external"}
+    return {
+        "path": p,
+        "url": signed_url,
+        "filename": fn,
+        "source_bucket": PRODUCT_IMAGES_BUCKET,
+    }
+
+
+@router.get("/designs/{design_id}/media")
+def get_design_media(
+    design_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Returns full-quality URLs for:
+      • Listing preview — stored in ``design-previews`` (same asset as the shop card when applicable).
+      • Designer gallery — ``product-images`` paths in ``designs.gallery_image_urls``.
+      • Workshop showcases — ``product-images`` paths on commitments.
+
+    Customers see and may download both listing preview and product-images gallery whenever access
+    is allowed (same signed URLs as other roles). Access: catalog-visible design, or an existing
+    customer order for this design, or designer / committed manufacturer / admin.
+
+    Uses signed URLs for private bucket paths (TTL ``MEDIA_SIGNED_TTL``).
+    Anonymous users: only when the design is visible on the public shop catalog.
+    """
+    design = get_one("designs", {"id": design_id})
+    if not design:
+        raise HTTPException(404, "Design not found")
+
+    profile: Optional[dict] = None
+    if authorization:
+        payload = verify_jwt(authorization)
+        profile = get_one("profiles", {"auth_id": payload.get("sub")})
+
+    if not _can_access_design_media(design, profile):
+        raise HTTPException(403, "Not allowed to view this design's images")
+
+    preview_raw = design.get("preview_image_url") or ""
+    gallery_items: list[dict] = []
+    for p in (design.get("gallery_image_urls") or []):
+        p = (p or "").strip()
+        if not p:
+            continue
+        if p.startswith("http://") or p.startswith("https://"):
+            gallery_items.append(_gallery_item_dict(p, p))
+        else:
+            gallery_items.append(
+                _gallery_item_dict(p, _sign_bucket_path(PRODUCT_IMAGES_BUCKET, p))
+            )
+
+    showcase_blocks: list[dict] = []
+    comm_rows = (
+        db_admin.table("manufacturer_commitments")
+        .select("id, status, showcase_image_urls")
+        .eq("design_id", design_id)
+        .execute()
+        .data
+    ) or []
+    for c in comm_rows:
+        imgs: list[dict] = []
+        for p in (c.get("showcase_image_urls") or []):
+            p = (p or "").strip()
+            if not p:
+                continue
+            if p.startswith("http://") or p.startswith("https://"):
+                imgs.append(_gallery_item_dict(p, p))
+            else:
+                imgs.append(
+                    _gallery_item_dict(p, _sign_bucket_path(PRODUCT_IMAGES_BUCKET, p))
+                )
+        if imgs:
+            showcase_blocks.append({
+                "commitment_id": c["id"],
+                "status": c.get("status"),
+                "images": imgs,
+            })
+
+    pv_url = _preview_display_url(preview_raw)
+    return {
+        "design_id": design_id,
+        "preview": {
+            "url": pv_url,
+            "filename": (preview_raw.rsplit("/", 1)[-1] if preview_raw else ""),
+            "source_bucket": _preview_source_bucket(preview_raw) or None,
+        },
+        "gallery": gallery_items,
+        "commitment_showcases": showcase_blocks,
+        "signed_url_ttl_seconds": MEDIA_SIGNED_TTL,
+    }
+
+
+# ════════════════════════════════════════════════════════════════
+# ENDPOINT: DESIGNER UPDATES GALLERY PATHS (after client uploads to Storage)
+# PATCH /api/v1/designs/{design_id}/gallery
+# ════════════════════════════════════════════════════════════════
+
+@router.patch("/designs/{design_id}/gallery")
+def update_design_gallery(
+    design_id: str,
+    req: DesignGalleryRequest,
+    authorization: Optional[str] = Header(None),
+):
+    payload = verify_jwt(authorization)
+    auth_sub = payload.get("sub")
+    profile = get_one("profiles", {"auth_id": auth_sub})
+    if not profile or profile["id"] != req.designer_id:
+        raise HTTPException(403, "You must be signed in as this designer")
+    if profile.get("role") != "designer":
+        raise HTTPException(403, "Only designers can edit the product gallery")
+
+    design = get_one("designs", {"id": design_id})
+    if not design or design["designer_id"] != profile["id"]:
+        raise HTTPException(403, "Not your design")
+
+    for p in req.gallery_image_urls:
+        p = (p or "").strip()
+        if not p:
+            continue
+        if p.startswith("http://") or p.startswith("https://"):
+            continue
+        if not auth_sub or not p.startswith(f"{auth_sub}/"):
+            raise HTTPException(
+                400,
+                "Gallery files must be uploaded to your Storage folder (product-images/{your-auth-id}/…).",
+            )
+
+    ok, err = safe_update(
+        "designs",
+        {"id": design_id},
+        {
+            "gallery_image_urls": req.gallery_image_urls,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    if not ok:
+        raise HTTPException(500, f"Update failed: {err}")
+    return {"design_id": design_id, "gallery_count": len(req.gallery_image_urls)}
 
 
 # ════════════════════════════════════════════════════════════════

@@ -17,10 +17,18 @@
 //   • Pause / Resume    (live ↔ paused)
 // ════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
-import { seekCommitments, reviewVariant, publishDesign, createDesign } from "../lib/api";
+import {
+  seekCommitments,
+  reviewVariant,
+  publishDesign,
+  createDesign,
+  getDesignerDesigns,
+  updateDesignGallery,
+} from "../lib/api";
 import { MACHINE_OPTIONS, MATERIAL_OPTIONS } from "../lib/workshop-tags";
+import DesignMediaGallery from "./DesignMediaGallery";
 
 /** Must match backend MIN_COMMITS_TO_GO_LIVE */
 const MIN_COMMITMENTS_TO_PUBLISH = 1;
@@ -48,40 +56,105 @@ export default function GigaSoukStagingArea({ designerId }) {
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState("pipeline");
   const [msg,       setMsg]       = useState({ text: "", type: "" });
+  const [galleryBusy, setGalleryBusy] = useState(null);
   const [showForm,  setShowForm]  = useState(false);
-
-  // ── Load designs ────────────────────────────────────────────────
+  const designsRef = useRef([]);
   useEffect(() => {
+    designsRef.current = designs;
+  }, [designs]);
+
+  // Pipeline + commitments come from the backend (service role) so RLS/embed quirks
+  // cannot hide rows. Variants list avoids joining manufacturers() — RLS blocks designers
+  // from reading other workshops' manufacturer rows, which broke the whole query for some DBs.
+  const loadPipeline = useCallback(async () => {
     if (!designerId) return;
     setLoading(true);
+    try {
+      const { data: designRows } = await getDesignerDesigns(designerId);
+      const rows = Array.isArray(designRows) ? designRows : [];
+      setDesigns(rows);
 
-    (async () => {
-      try {
-        const { data: designRows } = await supabase
-          .from("designs")
-          .select("*, manufacturer_commitments(id,status,region_city,committed_price)")
-          .eq("designer_id", designerId)
-          .order("created_at", { ascending: false });
-
-        const designIds = (designRows || []).map(d => d.id);
-
-        let variantRows = [];
-        if (designIds.length > 0) {
-          const { data: variantsData } = await supabase
-            .from("regional_price_variants")
-            .select("*, manufacturers(shop_name, city)")
-            .eq("status", "pending")
-            .in("design_id", designIds);
-          variantRows = variantsData || [];
-        }
-
-        setDesigns(designRows || []);
-        setVariants(variantRows);
-      } finally {
-        setLoading(false);
+      const designIds = rows.map(d => d.id);
+      let variantRows = [];
+      if (designIds.length > 0) {
+        const { data: variantsData } = await supabase
+          .from("regional_price_variants")
+          .select(
+            "id, design_id, commitment_id, manufacturer_id, proposed_price, base_price, price_diff_percent, region_city, region_state, reason, status, submitted_at"
+          )
+          .eq("status", "pending")
+          .in("design_id", designIds);
+        variantRows = variantsData || [];
       }
-    })();
+      setVariants(variantRows);
+    } catch (e) {
+      setDesigns([]);
+      setVariants([]);
+      flash(e?.response?.data?.detail || e?.message || "Could not load your designs.", "error");
+    } finally {
+      setLoading(false);
+    }
   }, [designerId]);
+
+  useEffect(() => {
+    loadPipeline();
+  }, [loadPipeline]);
+
+  // When a manufacturer commits, the design row updates (seeking → committed); refetch so
+  // Publish appears without a manual reload.
+  useEffect(() => {
+    if (!designerId) return;
+    const ch = supabase
+      .channel(`designer_pipeline_${designerId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "designs",
+          filter: `designer_id=eq.${designerId}`,
+        },
+        () => {
+          loadPipeline();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [designerId, loadPipeline]);
+
+  // New regional variants do not change the designs row; refresh pipeline when a variant
+  // appears for one of our design IDs.
+  useEffect(() => {
+    if (!designerId) return;
+    const ch = supabase
+      .channel(`designer_variant_ins_${designerId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "regional_price_variants" },
+        (payload) => {
+          const did = payload.new?.design_id;
+          if (did && designsRef.current.some((d) => d.id === did)) loadPipeline();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [designerId, loadPipeline]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") loadPipeline();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [loadPipeline]);
+
+  useEffect(() => {
+    if (tab === "variants") loadPipeline();
+  }, [tab, loadPipeline]);
 
   function flash(text, type = "success") {
     setMsg({ text, type });
@@ -92,7 +165,7 @@ export default function GigaSoukStagingArea({ designerId }) {
   async function handleSeek(designId) {
     try {
       await seekCommitments({ design_id: designId, designer_id: designerId });
-      setDesigns(prev => prev.map(d => d.id === designId ? { ...d, status: "seeking" } : d));
+      await loadPipeline();
       flash("Manufacturers have been alerted. Waiting for commitments.");
     } catch (e) {
       flash(e?.response?.data?.detail || "Failed to seek commitments.", "error");
@@ -103,18 +176,50 @@ export default function GigaSoukStagingArea({ designerId }) {
   async function handlePublish(designId) {
     try {
       await publishDesign(designId, designerId);
-      setDesigns(prev => prev.map(d => d.id === designId ? { ...d, status: "live" } : d));
+      await loadPipeline();
       flash("Design is now live in the shop!");
     } catch (e) {
       flash(e?.response?.data?.detail || "Could not publish design.", "error");
     }
   }
 
+  async function handleGalleryFiles(design, fileList) {
+    if (!fileList?.length) return;
+    setGalleryBusy(design.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        flash("Sign in to upload images.", "error");
+        return;
+      }
+      const newPaths = [];
+      for (const file of Array.from(fileList)) {
+        const ext = (file.name.split(".").pop() || "jpg").replace(/[^a-z0-9]/gi, "").slice(0, 8) || "jpg";
+        const path = `${user.id}/designs/${design.id}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage.from("product-images").upload(path, file, {
+          cacheControl: "31536000",
+          upsert: false,
+          contentType: file.type || "image/jpeg",
+        });
+        if (error) throw error;
+        newPaths.push(path);
+      }
+      const merged = [...(design.gallery_image_urls || []), ...newPaths];
+      await updateDesignGallery(design.id, designerId, merged);
+      await loadPipeline();
+      flash("Images added to your product gallery.");
+    } catch (e) {
+      flash(e?.response?.data?.detail || e?.message || "Upload failed.", "error");
+    } finally {
+      setGalleryBusy(null);
+    }
+  }
+
   // ── Approve / reject regional variant ───────────────────────────
   async function handleVariantReview(variantId, approved) {
     try {
-      await reviewVariant({ variant_id: variantId, designer_id: designerId, approved });
-      setVariants(prev => prev.filter(v => v.id !== variantId));
+      await reviewVariant({ variant_id: variantId, designer_id: designerId, approved, notes: "" });
+      await loadPipeline();
       flash(approved ? "Regional variant approved." : "Regional variant rejected.", approved ? "success" : "info");
     } catch {
       flash("Review failed. Try again.", "error");
@@ -122,10 +227,10 @@ export default function GigaSoukStagingArea({ designerId }) {
   }
 
   // ── Design created from form ─────────────────────────────────────
-  function handleDesignCreated(newDesign) {
-    setDesigns(prev => [newDesign, ...prev]);
+  function handleDesignCreated() {
     setShowForm(false);
     flash("Design created! Click 'Seek Commitments' when ready.");
+    loadPipeline();
   }
 
   const msgColor = { success: C.green, error: C.red, info: C.gold };
@@ -279,6 +384,55 @@ export default function GigaSoukStagingArea({ designerId }) {
                         📎 CAD file attached
                       </p>
                     )}
+
+                    <div style={{
+                      marginTop: 14,
+                      borderTop: `1px solid ${C.border}`,
+                      paddingTop: 12,
+                    }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: C.t2, marginBottom: 6 }}>
+                        Product & reference photos
+                      </p>
+                      <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.45 }}>
+                        Upload high-resolution JPEG, PNG, or WebP. Files go to your secure folder; buyers and makers see signed full-quality links.
+                      </p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        id={`gal-${design.id}`}
+                        style={{ display: "none" }}
+                        onChange={e => {
+                          handleGalleryFiles(design, e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        disabled={galleryBusy === design.id}
+                        onClick={() => document.getElementById(`gal-${design.id}`)?.click()}
+                        style={{
+                          padding: "8px 14px",
+                          borderRadius: 8,
+                          border: `1px solid ${C.green}66`,
+                          background: C.green + "18",
+                          color: C.green,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          cursor: galleryBusy === design.id ? "wait" : "pointer",
+                        }}
+                      >
+                        {galleryBusy === design.id ? "Uploading…" : "Add images"}
+                      </button>
+                      {(design.gallery_image_urls || []).length > 0 && (
+                        <p style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
+                          {(design.gallery_image_urls || []).length} image(s) saved
+                        </p>
+                      )}
+                      <div style={{ marginTop: 12 }}>
+                        <DesignMediaGallery designId={design.id} title={design.title} />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Right: action */}
@@ -347,8 +501,12 @@ export default function GigaSoukStagingArea({ designerId }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <p style={{ fontSize: 12, color: C.t3, marginBottom: 4 }}>REGIONAL PRICE VARIANT</p>
-                  <p style={{ fontSize: 15, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
-                    {v.manufacturers?.shop_name || "Manufacturer"} — {v.region_city}
+                  <p style={{ fontSize: 15, fontWeight: 700, color: C.t1, marginBottom: 4 }}>
+                    {v.region_city}
+                    {v.region_state ? `, ${v.region_state}` : ""}
+                  </p>
+                  <p style={{ fontSize: 11, color: C.t3, marginBottom: 8 }}>
+                    Workshop ref · {(v.manufacturer_id || "").slice(0, 8)}…
                   </p>
                   <div style={{ display: "flex", gap: 20, marginBottom: 8 }}>
                     <div>
@@ -393,7 +551,7 @@ export default function GigaSoukStagingArea({ designerId }) {
       {showForm && (
         <NewDesignModal
           designerId={designerId}
-          onCreated={handleDesignCreated}
+          onCreated={() => handleDesignCreated()}
           onClose={() => setShowForm(false)}
         />
       )}
@@ -501,24 +659,7 @@ function NewDesignModal({ designerId, onCreated, onClose }) {
       });
 
       succeeded = true;
-
-      // Build a local design object for the UI (same shape as Supabase row)
-      onCreated({
-        id: data.design_id,
-        designer_id: designerId,
-        title: form.title.trim(),
-        description: form.description.trim(),
-        category: form.category.trim(),
-        base_price: parseFloat(form.base_price),
-        royalty_percent: parseFloat(form.royalty_percent) || 15,
-        required_machines: machines,
-        required_materials: materials,
-        cad_file_url: cadPath,
-        preview_image_url: previewUrl,
-        status: "draft",
-        manufacturer_commitments: [],
-        created_at: new Date().toISOString(),
-      });
+      onCreated();
     } catch (e) {
       // Remove any already-uploaded files to prevent orphans in Storage.
       if (!succeeded) {

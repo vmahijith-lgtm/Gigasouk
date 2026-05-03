@@ -10,10 +10,13 @@
 
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import List, Optional
+
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Header
 from pydantic import BaseModel
 
 from db import db_admin, get_one, safe_update
+from routers.auth_router import verify_jwt
 from config import (
     MIN_COMMITS_TO_GO_LIVE,
     COMMITMENT_SEEK_HOURS,
@@ -88,18 +91,30 @@ class PauseDesignRequest(BaseModel):
     reason:     str = ""
 
 
+class ShowcaseImagesBody(BaseModel):
+    showcase_image_urls: List[str]
+
+
 # ════════════════════════════════════════════════════════════════
 # ENDPOINT: DESIGNER SUBMITS DESIGN FOR SEEKING
 # POST /api/v1/designs/seek
 # ════════════════════════════════════════════════════════════════
 
 @router.post("/designs/seek")
-async def seek_commitments(req: SeekCommitmentsRequest, bg: BackgroundTasks):
+async def seek_commitments(
+    req: SeekCommitmentsRequest,
+    bg: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+):
     """
     Designer moves their design from DRAFT to SEEKING.
     Platform alerts all capable manufacturers nationally via WhatsApp + email.
     Design is NOT visible to customers yet.
     """
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile["id"] != req.designer_id:
+        raise HTTPException(403, "You must be signed in as this designer")
 
     design = get_one("designs", {"id": req.design_id})
     if not design:
@@ -272,12 +287,20 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
 # ════════════════════════════════════════════════════════════════
 
 @router.post("/commitments/variants/review")
-async def review_variant(req: ApproveVariantRequest, bg: BackgroundTasks):
+async def review_variant(
+    req: ApproveVariantRequest,
+    bg: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+):
     """
     Designer approves or rejects a regional price variant.
     Approved: manufacturer commitment becomes active.
     Rejected: manufacturer is notified, commitment removed.
     """
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile["id"] != req.designer_id:
+        raise HTTPException(403, "You must be signed in as this designer")
 
     variant = get_one("regional_price_variants", {"id": req.variant_id})
     if not variant:
@@ -398,19 +421,94 @@ def get_available_designs(manufacturer_id: str):
 # ════════════════════════════════════════════════════════════════
 
 @router.get("/commitments/mine")
-def get_my_commitments(manufacturer_id: str):
+def get_my_commitments(authorization: Optional[str] = Header(None)):
     """
-    All active commitments for a manufacturer.
-    Shows which designs they are a Certified Maker for.
+    Authenticated manufacturer only (JWT). Returns commitments still relevant for
+    the workshop queue: pending approval (regional variants), active, and paused.
+    Withdrawn/rejected are omitted. Manufacturer id comes from the profile — not
+    the query string — so rows cannot be scraped by spoofing another id.
     """
-    return (
+    payload = verify_jwt(authorization)
+    uid = payload.get("sub")
+    if not uid:
+        raise HTTPException(401, "Invalid token")
+    profile = get_one("profiles", {"auth_id": uid})
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+    if profile.get("role") != "manufacturer":
+        raise HTTPException(403, "Manufacturers only")
+
+    mfr = get_one("manufacturers", {"profile_id": profile["id"]})
+    if not mfr:
+        raise HTTPException(404, "Manufacturer profile not found")
+
+    rows = (
         db_admin.table("manufacturer_commitments")
-        .select("*, designs(id, title, base_price, status)")
-        .eq("manufacturer_id", manufacturer_id)
-        .eq("status", "active")
+        .select(
+            "id, design_id, committed_price, base_price, region_city, region_state, "
+            "status, committed_at, notes, showcase_image_urls, "
+            "designs(id, title, base_price, status, preview_image_url, cad_file_url)"
+        )
+        .eq("manufacturer_id", mfr["id"])
+        .in_("status", ["pending_approval", "active", "paused"])
+        .order("committed_at", desc=True)
         .execute()
         .data
     )
+    return rows or []
+
+
+# ════════════════════════════════════════════════════════════════
+# ENDPOINT: MANUFACTURER PRODUCT / SHOWCASE PHOTOS (storage paths)
+# PATCH /api/v1/commitments/{commitment_id}/showcase
+# ════════════════════════════════════════════════════════════════
+
+@router.patch("/commitments/{commitment_id}/showcase")
+def update_commitment_showcase(
+    commitment_id: str,
+    req: ShowcaseImagesBody,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Replace showcase_image_urls after the client uploaded files to product-images/
+    under `{auth.uid()}/showcase/{commitment_id}/…`.
+    """
+    payload = verify_jwt(authorization)
+    auth_sub = payload.get("sub")
+    profile = get_one("profiles", {"auth_id": auth_sub})
+    if not profile or profile.get("role") != "manufacturer":
+        raise HTTPException(403, "Manufacturers only")
+
+    mfr = get_one("manufacturers", {"profile_id": profile["id"]})
+    if not mfr:
+        raise HTTPException(404, "Manufacturer profile not found")
+
+    c = get_one("manufacturer_commitments", {"id": commitment_id})
+    if not c:
+        raise HTTPException(404, "Commitment not found")
+    if c["manufacturer_id"] != mfr["id"]:
+        raise HTTPException(403, "Not your commitment")
+
+    for p in req.showcase_image_urls:
+        p = (p or "").strip()
+        if not p:
+            continue
+        if p.startswith("http://") or p.startswith("https://"):
+            continue
+        if not auth_sub or not p.startswith(f"{auth_sub}/"):
+            raise HTTPException(
+                400,
+                "Showcase files must live under your Storage folder (product-images/{your-auth-id}/…).",
+            )
+
+    ok, err = safe_update(
+        "manufacturer_commitments",
+        {"id": commitment_id},
+        {"showcase_image_urls": req.showcase_image_urls, "updated_at": datetime.now(timezone.utc).isoformat()},
+    )
+    if not ok:
+        raise HTTPException(500, f"Update failed: {err}")
+    return {"commitment_id": commitment_id, "count": len(req.showcase_image_urls)}
 
 
 # ════════════════════════════════════════════════════════════════
@@ -419,12 +517,27 @@ def get_my_commitments(manufacturer_id: str):
 # ════════════════════════════════════════════════════════════════
 
 @router.post("/designs/{design_id}/publish")
-async def publish_design(design_id: str, body: dict, bg: BackgroundTasks):
+async def publish_design(
+    design_id: str,
+    body: dict,
+    bg: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+):
     """
     Designer manually publishes a COMMITTED design to LIVE.
     Only possible once MIN_COMMITS_TO_GO_LIVE are active.
     """
     designer_id = body.get("designer_id")
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile["id"] != designer_id:
+        raise HTTPException(403, "You must be signed in as this designer")
+    if profile.get("role") != "designer":
+        raise HTTPException(
+            403,
+            "Only the design owner (designer role) can publish a design. Manufacturers commit to build; they cannot take a design live.",
+        )
+
     design = get_one("designs", {"id": design_id})
 
     if not design:

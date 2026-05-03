@@ -553,6 +553,7 @@ function CommitPanel({ design, commitPrice, setCommitPrice, workshopCity, worksh
         <p style={{ fontSize: 11, color: C.t3, marginTop: 12, textAlign: "center", lineHeight: 1.5 }}>
           By committing you agree to fulfill orders in your region at the committed price.
           You can withdraw a commitment if no orders have been placed yet.
+          {" "}The designer decides when the listing goes live in the shop — not the manufacturer.
         </p>
       </div>
     </div>

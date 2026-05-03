@@ -97,6 +97,17 @@ CREATE POLICY "orders_read_own_customer"
         customer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
     );
 
+-- 4a′. orders — manufacturer assigned on the order can read it (dashboard / realtime)
+DROP POLICY IF EXISTS "orders_read_own_manufacturer" ON orders;
+CREATE POLICY "orders_read_own_manufacturer"
+    ON orders FOR SELECT
+    USING (
+        manufacturer_id IN (
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        )
+    );
+
 -- 4b. wallet_txns — read own wallet history
 DROP POLICY IF EXISTS "wallet_read_own" ON wallet_txns;
 CREATE POLICY "wallet_read_own"
