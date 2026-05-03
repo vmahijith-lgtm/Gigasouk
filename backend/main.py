@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
 from contextlib import asynccontextmanager
 
-from config import APP_URL, ALLOWED_ORIGINS
+from config import APP_URL, ALLOWED_ORIGINS, ALLOWED_ORIGIN_REGEX
 
 # ── Feature routers (all served under /api/v1) ───────────────────
 from routers.gigasouk_engine   import router as engine_router
@@ -94,6 +94,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

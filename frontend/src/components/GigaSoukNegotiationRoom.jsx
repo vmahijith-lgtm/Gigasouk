@@ -6,7 +6,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { submitBid, acceptBid, sendMessage, markRead } from "../lib/api";
-import DesignMediaGallery from "./DesignMediaGallery";
 import { shortDesignChatLabel } from "../lib/negotiationLabels";
 
 const C = {
@@ -41,10 +40,8 @@ export default function GigaSoukNegotiationRoom({
   const [meta, setMeta] = useState({
     designTitle: "",
     designSummary: "",
-    designPreviewUrl: null,
     orderRef: "",
     counterpartyName: "",
-    designId: null,
   });
   const [messages, setMessages] = useState([]);
   const [bids, setBids] = useState([]);
@@ -126,17 +123,15 @@ export default function GigaSoukNegotiationRoom({
       setBidAmount(String(r.base_price ?? ""));
       let title = "";
       let designSummary = "";
-      let designPreviewUrl = null;
       const designId = r.orders?.design_id;
       if (designId) {
         const { data: drow } = await supabase
           .from("designs")
-          .select("title, description, preview_image_url")
+          .select("title, description")
           .eq("id", designId)
           .maybeSingle();
         title = drow?.title || "";
         designSummary = drow ? shortDesignChatLabel(drow) : "";
-        designPreviewUrl = drow?.preview_image_url || null;
       }
       const ref = r.orders?.order_ref || "";
       let cp = "";
@@ -159,10 +154,8 @@ export default function GigaSoukNegotiationRoom({
         setMeta({
           designTitle: title,
           designSummary: designSummary || title,
-          designPreviewUrl,
           orderRef: ref,
           counterpartyName: cp,
-          designId: designId || null,
         });
       }
 
@@ -449,44 +442,24 @@ export default function GigaSoukNegotiationRoom({
         }}
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-          {meta.designPreviewUrl ? (
-            <div
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                overflow: "hidden",
-                border: `1px solid ${C.border}`,
-                background: "#060910",
-                flexShrink: 0,
-              }}
-            >
-              <img
-                src={meta.designPreviewUrl}
-                alt=""
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
-            </div>
-          ) : (
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 12,
-                background: C.green + "22",
-                border: `1px solid ${C.green}44`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 800,
-                fontSize: 14,
-                color: C.green,
-                flexShrink: 0,
-              }}
-            >
-              {initials(meta.counterpartyName)}
-            </div>
-          )}
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: C.green + "22",
+              border: `1px solid ${C.green}44`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 800,
+              fontSize: 14,
+              color: C.green,
+              flexShrink: 0,
+            }}
+          >
+            {initials(meta.counterpartyName)}
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p
               style={{
@@ -560,35 +533,6 @@ export default function GigaSoukNegotiationRoom({
           Base reference: ₹{Number(room.base_price).toLocaleString("en-IN")}
         </p>
       </div>
-
-      {meta.designId && (
-        <div
-          style={{
-            padding: "12px 18px",
-            borderBottom: `1px solid ${C.border}`,
-            background: C.bg,
-            maxHeight: "min(42vh, 380px)",
-            overflowY: "auto",
-          }}
-        >
-          <p
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: C.t3,
-              letterSpacing: "0.08em",
-              margin: "0 0 10px",
-            }}
-          >
-            DESIGN PHOTOS
-          </p>
-          <DesignMediaGallery
-            designId={meta.designId}
-            title={meta.designTitle}
-            storefront
-          />
-        </div>
-      )}
 
       {activeBid && !isLocked && (
         <div

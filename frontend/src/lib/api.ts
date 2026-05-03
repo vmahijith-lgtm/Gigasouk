@@ -4,9 +4,11 @@
 import axios from "axios";
 import { supabase } from "./supabase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+/** Browser-facing FastAPI origin — use for fetch() as well as axios (same default as axios baseURL). */
+export const BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const api = axios.create({ baseURL: API_BASE, timeout: 15000 });
+const api = axios.create({ baseURL: BACKEND_URL, timeout: 15000 });
 
 // Attach the current user's JWT on every outbound request.
 // Endpoints that don't verify the token simply ignore the header.

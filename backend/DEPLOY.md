@@ -45,7 +45,7 @@ git push origin main
 
 In Railway: **Service → Variables → Add Variable**
 
-Add every key from `.env.example`. The most critical ones:
+Add every key from [`backend/.env.example`](.env.example). The most critical ones:
 
 | Variable | Where to get it |
 |---|---|
@@ -62,8 +62,9 @@ Add every key from `.env.example`. The most critical ones:
 | `RESEND_FROM_EMAIL` | `noreply@gigasouk.com` (after domain verification) |
 | `SHIPROCKET_EMAIL` | Your Shiprocket login email |
 | `SHIPROCKET_PASSWORD` | Your Shiprocket login password |
-| `APP_URL` | Your frontend URL e.g. `https://gigasouk.com` |
-| `ALLOWED_ORIGINS` | `https://gigasouk.com,https://www.gigasouk.com` |
+| `APP_URL` | Your **frontend** URL (Vercel production), e.g. `https://your-app.vercel.app` — used in email links |
+| `ALLOWED_ORIGINS` | Comma-separated origins allowed to call the API from the browser, e.g. `https://your-app.vercel.app,http://localhost:3000` |
+| `ALLOWED_ORIGIN_REGEX` | *(Optional)* e.g. `^https://.*\.vercel\.app$` to allow all Vercel preview deployments without listing each URL |
 
 > **Never** paste secrets into `railway.toml`. Always use the Variables panel.
 
@@ -91,13 +92,15 @@ After Railway deploys, open:
 | `https://your-service.up.railway.app/health/jobs` | JSON list of 3 scheduled background jobs |
 | `https://your-service.up.railway.app/docs` | Swagger UI with all endpoints |
 
-### Step 7 — Set Frontend API URL
+### Step 7 — Deploy frontend on Vercel
 
-In your frontend (Vercel/Netlify), add:
+See **[frontend/DEPLOY.md](../frontend/DEPLOY.md)** — set **Root Directory** to `frontend` and add:
 
 ```
 NEXT_PUBLIC_API_URL=https://your-service.up.railway.app
 ```
+
+(No trailing slash.) Match your Railway **public** HTTPS URL from **Settings → Networking → Public Networking**.
 
 ---
 
@@ -195,11 +198,21 @@ apt-get update && apt-get install -y libgl1-mesa-glx libglib2.0-0
 
 **Symptom**: `Access-Control-Allow-Origin` blocked in browser console.
 
-**Fix**: Set `ALLOWED_ORIGINS` in your env vars to your exact frontend URL:
+**Fix**: Set `ALLOWED_ORIGINS` to comma-separated **exact** frontend origins (scheme + host + port). Example:
+
 ```
-ALLOWED_ORIGINS=https://gigasouk.com,https://www.gigasouk.com
+ALLOWED_ORIGINS=https://your-app.vercel.app,http://localhost:3000
 ```
-No trailing slash. No wildcard in production.
+
+No trailing slash on URLs.
+
+**Vercel preview URLs** (`*.vercel.app`) change per deployment. Either list each preview origin or set:
+
+```
+ALLOWED_ORIGIN_REGEX=^https://.*\.vercel\.app$
+```
+
+(Production-only setups can omit `ALLOWED_ORIGIN_REGEX`.)
 
 ### Duplicate notifications / duplicate DB writes
 
@@ -238,7 +251,8 @@ Full list with all required and optional variables:
 | `RESEND_API_KEY` | ✅ | — | Starts with `re_` |
 | `RESEND_FROM_EMAIL` | ✅ | `noreply@gigasouk.com` | Must be verified on Resend |
 | `APP_URL` | ✅ | `https://gigasouk.com` | Frontend URL (used in notification links) |
-| `ALLOWED_ORIGINS` | ✅ | `https://gigasouk.com,...` | Comma-separated frontend origins |
+| `ALLOWED_ORIGINS` | ✅ | localhost + `gigasouk.com` in dev defaults | Comma-separated browser origins for CORS |
+| `ALLOWED_ORIGIN_REGEX` | ⬜ | — | e.g. `^https://.*\.vercel\.app$` for all Vercel previews |
 | `GOOGLE_MAPS_API_KEY` | ⬜ | — | Optional geocoding fallback |
 | `QC_SCALE_MM_PER_PX` | ⬜ | `0.1` | mm per pixel for QC engine |
 | `QC_TOLERANCE_MM` | ⬜ | `0.5` | Max allowed deviation in mm |
@@ -260,4 +274,4 @@ APScheduler runs **inside the uvicorn process**. With multiple workers:
 
 ---
 
-*Last updated: 2026-04-30*
+*Last updated: 2026-05-03*

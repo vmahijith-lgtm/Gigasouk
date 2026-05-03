@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { getWalletTransactions } from "../lib/api";
+import { getWalletTransactions, BACKEND_URL } from "../lib/api";
 import GigaSoukStagingArea from "./GigaSoukStagingArea";
 import NegotiationList from "./NegotiationList";
 import DesignMediaGallery from "./DesignMediaGallery";
@@ -51,9 +51,11 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
 
         const [meRes, sRes, oRes, txnPack] = await Promise.all([
           token
-            ? fetch(`${API_BASE}/api/auth/me`, {
+            ? fetch(`${BACKEND_URL}/api/auth/me`, {
               headers: { Authorization: `Bearer ${token}` },
-            }).then(r => (r.ok ? r.json() : null))
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .catch(() => null)
             : Promise.resolve(null),
           supabase.rpc("get_designer_stats", { p_designer_id: designerId }),
           // Orders for designs owned by this designer
@@ -62,7 +64,9 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
             .eq("designs.designer_id", designerId)
             .order("created_at", { ascending: false }).limit(20),
           token
-            ? getWalletTransactions(40).then(r => r.data?.transactions || [])
+            ? getWalletTransactions(40)
+                .then((r) => r.data?.transactions || [])
+                .catch(() => [])
             : Promise.resolve([]),
         ]);
 

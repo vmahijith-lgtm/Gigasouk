@@ -7,7 +7,13 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
-import { submitQC, updateOrderStatus, getMyCommitments, updateCommitmentShowcase } from "../lib/api";
+import {
+  submitQC,
+  updateOrderStatus,
+  getMyCommitments,
+  updateCommitmentShowcase,
+  BACKEND_URL,
+} from "../lib/api";
 import { MACHINE_OPTIONS, MATERIAL_OPTIONS } from "../lib/workshop-tags";
 import GigaSoukCommitmentBoard from "./GigaSoukCommitmentBoard";
 import { ManufacturerOrderMap } from "./MapComponents";
@@ -15,14 +21,12 @@ import LocationPicker from "./LocationPicker";
 import NegotiationList from "./NegotiationList";
 import DesignMediaGallery from "./DesignMediaGallery";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
-
 // Fetch a 60-minute signed URL for a design's CAD file
 async function fetchCadUrl(designId) {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) throw new Error("Not authenticated");
-  const res = await fetch(`${API_BASE}/api/v1/designs/${designId}/cad-url`, {
+  const res = await fetch(`${BACKEND_URL}/api/v1/designs/${designId}/cad-url`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
@@ -136,9 +140,11 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
 
         const [meRes, jRes, commList, oIdsRes] = await Promise.all([
           token
-            ? fetch(`${API_BASE}/api/auth/me`, {
+            ? fetch(`${BACKEND_URL}/api/auth/me`, {
               headers: { Authorization: `Bearer ${token}` },
-            }).then(r => (r.ok ? r.json() : null))
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .catch(() => null)
             : Promise.resolve(null),
           supabase.from("orders").select("id, design_id, order_ref, status, payment_status, commitment_id, locked_price, committed_price, shiprocket_awb, tracking_url, created_at, delivery_address, designs(title, cad_file_url, preview_image_url), qc_records(*)")
             .eq("manufacturer_id", manufacturerId)
@@ -806,7 +812,35 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
       {/* ── ACTIVE JOBS TAB ──────────────────────────────────────── */}
       {tab === "jobs" && (
         <div>
-          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Active Jobs</h3>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 14,
+              flexWrap: "wrap",
+              marginBottom: 6,
+            }}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Active Jobs</h3>
+            <button
+              type="button"
+              onClick={() => setTab("chat")}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: `1px solid ${C.green}66`,
+                background: `${C.green}18`,
+                color: C.green,
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              Go to chats
+            </button>
+          </div>
           <p style={{ fontSize: 13, color: C.t3, marginBottom: 18, lineHeight: 1.5, maxWidth: 640 }}>
             Customer orders you are fulfilling, plus <strong style={{ color: C.t2 }}>design commitments</strong> that do
             not yet have a buyer order (you will see the full order workflow here once a customer checks out).

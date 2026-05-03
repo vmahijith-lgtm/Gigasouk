@@ -38,8 +38,20 @@ RESEND_API_KEY    = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "noreply@gigasouk.com")
 
 # ── App ──────────────────────────────────────────────────────────
-APP_URL         = os.getenv("APP_URL", "https://gigasouk.com")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://gigasouk.com").split(",")
+# APP_URL = canonical frontend (email links, redirects). Use your Vercel production URL.
+APP_URL = os.getenv("APP_URL", "https://gigasouk.com").rstrip("/")
+
+# Comma-separated browser origins allowed to call this API (CORS).
+_origins_raw = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000,https://gigasouk.com",
+)
+ALLOWED_ORIGINS = [o.strip() for o in _origins_raw.split(",") if o.strip()]
+
+# Optional regex for extra origins, e.g. all Vercel previews:
+#   ALLOWED_ORIGIN_REGEX=^https://.*\.vercel\.app$
+# Starlette uses fullmatch — anchor your pattern.
+ALLOWED_ORIGIN_REGEX = os.getenv("ALLOWED_ORIGIN_REGEX", "").strip() or None
 
 # ── Google Maps (Backend geocoding fallback) ─────────────────────────
 # Used to geocode pincode → lat/lng when the frontend sends lat=0, lng=0.

@@ -7,6 +7,7 @@
 import { useEffect, useState } from "react";
 import { useParams }           from "next/navigation";
 import { supabase }            from "../../../lib/supabase";
+import { BACKEND_URL }         from "../../../lib/api";
 import { TrackingMap }         from "../../../components/MapComponents";
 
 const C = {
@@ -61,7 +62,7 @@ export default function TrackOrderPage() {
 
         if (ord.shiprocket_awb) {
           const res = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/v1/track/${ord.shiprocket_awb}`
+            `${BACKEND_URL}/api/v1/track/${ord.shiprocket_awb}`
           );
           if (res.ok) setTrack(await res.json());
         }

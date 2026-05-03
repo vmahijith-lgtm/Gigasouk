@@ -9,10 +9,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { getAvailableDesigns, createCommitment } from "../lib/api";
+import { getAvailableDesigns, createCommitment, BACKEND_URL } from "../lib/api";
 import DesignMediaGallery from "./DesignMediaGallery";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 // ── Design Tokens ─────────────────────────────────────────────────
 const C = {
@@ -114,7 +112,7 @@ export default function GigaSoukCommitmentBoard({
       const token = session?.access_token;
       if (!token) { setError("You must be signed in to view CAD files."); return; }
 
-      const res = await fetch(`${API_BASE}/api/v1/designs/${designId}/cad-url`, {
+      const res = await fetch(`${BACKEND_URL}/api/v1/designs/${designId}/cad-url`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {

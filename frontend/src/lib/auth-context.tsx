@@ -7,8 +7,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "./supabase";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+import { BACKEND_URL } from "./api";
 
 type UserRole = "designer" | "manufacturer" | "admin" | "customer" | null;
 
@@ -56,9 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // returns profile + manufacturer_id / designer_id without needing
     // per-table SELECT policies on the Supabase side. This avoids the
     // "manufacturer profile being set up" loop when RLS is restrictive.
-    if (accessToken && API_BASE) {
+    if (accessToken) {
       try {
-        const res = await fetch(`${API_BASE}/api/auth/me`, {
+        const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (res.ok) {

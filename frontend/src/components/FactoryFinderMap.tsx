@@ -13,6 +13,7 @@
 // ════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { BACKEND_URL } from "../lib/api";
 import { AddressAutocomplete, type DeliveryAddress } from "./MapComponents";
 
 export type { DeliveryAddress };
@@ -91,7 +92,7 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
         city:      addr.city,
       });
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/available-factories?${params}`
+        `${BACKEND_URL}/api/v1/available-factories?${params}`
       );
       if (!res.ok) throw new Error(await res.text());
       const data: FactoryOption[] = await res.json();
