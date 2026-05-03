@@ -15,8 +15,8 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Must bind to 0.0.0.0 and read $PORT — Railway injects PORT at runtime.
-startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info --timeout-keep-alive 75"
+# Must run through sh so $PORT expands (exec-form uvicorn gets literal "$PORT" otherwise).
+startCommand = '''sh -c "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --log-level info --timeout-keep-alive 75"'''
 
 # ── Health Check ────────────────────────────────────────────────
 # Railway pings this URL after deploy. If it returns non-200,

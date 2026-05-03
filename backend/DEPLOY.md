@@ -174,6 +174,12 @@ For production, upgrade to the **Standard** plan ($7/mo) to keep the service alw
 
 ## Common Issues
 
+### Railway runtime: `Invalid value for '--port': '$PORT' is not a valid integer`
+
+**Cause**: The start command ran `uvicorn … --port $PORT` **without a shell**, so the literal characters `$PORT` were passed to uvicorn.
+
+**Fix**: `railway.toml` wraps the server in `sh -c "… --port ${PORT:-8000} …"`. If you still see this, open **Railway → Service → Settings → Deploy → Custom Start Command** and remove any override so config-as-code applies.
+
 ### Railway build: `python: command not found` (exit 127)
 
 **Symptom**: Docker/Railpack step runs `python -m venv …` but `/bin/bash: python: command not found`.
