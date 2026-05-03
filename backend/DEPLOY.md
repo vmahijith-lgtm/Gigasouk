@@ -38,8 +38,8 @@ git push origin main
    - Set **Root Directory** to `backend`
 5. Click **Deploy**
 
-> Railway reads `backend/railway.toml` and `backend/nixpacks.toml` automatically.
-> Nixpacks installs `libGL` and `glib` (required by OpenCV) before running `pip install`.
+> Railway reads `backend/railway.toml` and builds with **`backend/Dockerfile`** (Python 3.11 slim + OpenCV system libs).  
+> If you see `python: command not found` on older Railpack builds, confirm **Root Directory** is `backend` and redeploy after pulling latest `main`.
 
 ### Step 3 — Set Environment Variables
 
@@ -174,13 +174,17 @@ For production, upgrade to the **Standard** plan ($7/mo) to keep the service alw
 
 ## Common Issues
 
-### Railway build: `pip` exit code 127
+### Railway build: `python: command not found` (exit 127)
 
-**Symptom**: `process "... pip install --upgrade pip" did not complete successfully: exit code 127`
+**Symptom**: Docker/Railpack step runs `python -m venv …` but `/bin/bash: python: command not found`.
 
-**Cause**: Overriding Nixpacks `[phases.install]` with bare `pip` runs before the Python provider wires `pip` onto `PATH`.
+**Fix**: Deploy with the repo’s **`backend/Dockerfile`** (`railway.toml` uses `builder = "DOCKERFILE"`). The image is `python:3.11-slim-bookworm`, so `python` and `pip` are always available.
 
-**Fix**: Keep only `[phases.setup]` `nixPkgs` in `nixpacks.toml` and let Nixpacks install `requirements.txt` automatically (do not replace the install phase with `pip …` commands).
+### Railway build: `pip` exit code 127 (Nixpacks only)
+
+**Symptom**: Custom Nixpacks `[phases.install]` runs `pip` before it exists on `PATH`.
+
+**Fix**: Do not override `[phases.install]` with bare `pip` commands, or switch to the Dockerfile build above.
 
 ### `cv2` ImportError on deploy
 

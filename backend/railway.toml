@@ -9,9 +9,10 @@
 # ════════════════════════════════════════════════════════════════
 
 [build]
-# Railway uses Nixpacks by default. nixpacks.toml (in this dir)
-# tells it which system packages to install before pip.
-builder = "nixpacks"
+# Dockerfile avoids Railpack/Nix images where `python` is missing from PATH (exit 127).
+# See backend/Dockerfile. To use Nixpacks instead, set builder = "nixpacks" and remove dockerfilePath.
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 # Must bind to 0.0.0.0 and read $PORT — Railway injects PORT at runtime.
