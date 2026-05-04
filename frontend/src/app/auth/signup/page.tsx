@@ -222,7 +222,8 @@ function SignupForm() {
     setOauthLoading(true);
 
     const next = searchParams.get("next") ?? "/";
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+    const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`;
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",

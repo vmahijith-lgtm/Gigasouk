@@ -277,16 +277,15 @@ async def place_order(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Customer or designer places an order when at least one manufacturer has committed.
-    Buyer identity comes from the JWT only (cannot spoof customer_id on the order row).
+    Customer places an order when at least one manufacturer has committed.
+    Customer identity comes from the JWT only (cannot spoof customer_id).
     """
     payload = verify_jwt(authorization)
     profile = get_one("profiles", {"auth_id": payload.get("sub")})
     if not profile:
         raise HTTPException(404, "Profile not found")
-    role = profile.get("role")
-    if role not in ("customer", "designer"):
-        raise HTTPException(403, "Only customers and designers can place orders")
+    if profile.get("role") != "customer":
+        raise HTTPException(403, "Only customers can place orders")
     customer_id = profile["id"]
 
     # ── Validate design ─────────────────────────────────────────
@@ -295,8 +294,6 @@ async def place_order(
         raise HTTPException(404, "Design not found")
     if design["status"] in (DESIGN_STATUS_DRAFT, DESIGN_STATUS_PAUSED):
         raise HTTPException(400, "Design is not available for ordering yet")
-    if role == "designer" and design.get("designer_id") == customer_id:
-        raise HTTPException(400, "You cannot place an order on your own design")
 
     # ── Find best factory from committed pool ────────────────────
     c_lat = req.delivery_address.get("lat", 0)
@@ -356,40 +353,19 @@ async def place_order(
     }
     db_admin.table("orders").insert(order_data).execute()
 
-    # ── Negotiation room: link existing pre-commitment room or create ──
-    pre_rows = (
-        db_admin.table("negotiation_rooms")
-        .select("id, order_id")
-        .eq("commitment_id", best["id"])
-        .limit(3)
-        .execute()
-        .data
-        or []
-    )
-    pre_room = next((r for r in pre_rows if not r.get("order_id")), None)
-
-    if pre_room:
-        room_id = pre_room["id"]
-        expires = datetime.now(timezone.utc) + timedelta(hours=NEGOTIATION_TIMEOUT_HOURS)
-        db_admin.table("negotiation_rooms").update({
-            "order_id":     order_id,
-            "base_price":   best["committed_price"],
-            "expires_at":   expires.isoformat(),
-        }).eq("id", room_id).execute()
-    else:
-        room_id = str(uuid.uuid4())
-        expires = datetime.now(timezone.utc) + timedelta(hours=NEGOTIATION_TIMEOUT_HOURS)
-        db_admin.table("negotiation_rooms").insert({
-            "id":              room_id,
-            "order_id":        order_id,
-            "commitment_id":   best["id"],
-            "designer_id":     design["designer_id"],
-            "manufacturer_id": manufacturer_id,
-            "base_price":      best["committed_price"],
-            "locked_price":    None,
-            "status":          "open",
-            "expires_at":      expires.isoformat(),
-        }).execute()
+    # ── Create negotiation room ──────────────────────────────────
+    room_id = str(uuid.uuid4())
+    expires = datetime.now(timezone.utc) + timedelta(hours=NEGOTIATION_TIMEOUT_HOURS)
+    db_admin.table("negotiation_rooms").insert({
+        "id":              room_id,
+        "order_id":        order_id,
+        "designer_id":     design["designer_id"],
+        "manufacturer_id": manufacturer_id,
+        "base_price":      best["committed_price"],
+        "locked_price":    None,
+        "status":          "open",
+        "expires_at":      expires.isoformat(),
+    }).execute()
 
     # ── Link room back to order ───────────────────────────────────
     # Needed so queries like get_one("orders", {"negotiation_room_id": room_id}) work.

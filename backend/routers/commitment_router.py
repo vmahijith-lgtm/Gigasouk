@@ -32,7 +32,6 @@ from services.notify_service import (
     notify_designer_design_live,
     notify_manufacturer_regional_variant_needed,
 )
-from services.negotiation_room_service import ensure_negotiation_room_for_commitment
 
 router = APIRouter()
 
@@ -272,14 +271,6 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
         req.committed_price,
     )
 
-    ensure_negotiation_room_for_commitment(
-        commitment_id,
-        req.design_id,
-        design["designer_id"],
-        req.manufacturer_id,
-        float(req.committed_price),
-    )
-
     # Check if design should advance
     bg.add_task(_check_and_advance_design, req.design_id)
 
@@ -331,15 +322,6 @@ async def review_variant(
              "reviewer_notes": req.notes}
         )
         bg.add_task(_check_and_advance_design, variant["design_id"])
-        commit_row = get_one("manufacturer_commitments", {"id": variant["commitment_id"]})
-        if commit_row:
-            ensure_negotiation_room_for_commitment(
-                variant["commitment_id"],
-                variant["design_id"],
-                design["designer_id"],
-                commit_row["manufacturer_id"],
-                float(commit_row["committed_price"]),
-            )
 
         return {"approved": True, "message": "Regional variant approved. Manufacturer is now active."}
 

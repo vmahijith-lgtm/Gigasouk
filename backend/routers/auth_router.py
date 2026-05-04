@@ -578,14 +578,14 @@ def patch_preferred_delivery(
     body: PreferredDeliveryBody,
     authorization: Optional[str] = Header(None),
 ):
-    """Customers and designers save delivery defaults used for routing and checkout."""
+    """Customers save their usual delivery coordinates & address fields."""
     payload = verify_jwt(authorization)
     auth_uid = payload.get("sub")
     profile = get_one("profiles", {"auth_id": auth_uid})
     if not profile:
         raise HTTPException(404, "Profile not found")
-    if profile.get("role") not in ("customer", "designer"):
-        raise HTTPException(403, "Only customers and designers can set a preferred delivery location")
+    if profile.get("role") != "customer":
+        raise HTTPException(403, "Only customers can set a preferred delivery location")
 
     data = {
         "line1":   body.line1.strip(),

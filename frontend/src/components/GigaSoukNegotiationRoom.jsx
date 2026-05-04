@@ -85,7 +85,6 @@ export default function GigaSoukNegotiationRoom({
         .select(
           `
           *,
-          commitment_id,
           orders!order_id ( order_ref, design_id )
         `
         )
@@ -124,15 +123,7 @@ export default function GigaSoukNegotiationRoom({
       setBidAmount(String(r.base_price ?? ""));
       let title = "";
       let designSummary = "";
-      let designId = r.orders?.design_id;
-      if (!designId && r.commitment_id) {
-        const { data: crow } = await supabase
-          .from("manufacturer_commitments")
-          .select("design_id")
-          .eq("id", r.commitment_id)
-          .maybeSingle();
-        designId = crow?.design_id;
-      }
+      const designId = r.orders?.design_id;
       if (designId) {
         const { data: drow } = await supabase
           .from("designs")

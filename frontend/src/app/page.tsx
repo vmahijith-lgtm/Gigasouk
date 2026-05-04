@@ -60,9 +60,10 @@ export default function HomePage() {
   const [orderMsg, setOrderMsg] = useState("");
   const catalogRef = useRef<HTMLDivElement>(null);
 
-  /* Role redirect — designers may stay here to shop and place orders like customers */
+  /* Role redirect */
   useEffect(() => {
     if (loading) return;
+    if (user?.role === "designer")     router.replace("/designer");
     if (user?.role === "manufacturer") router.replace("/manufacturer");
     if (user?.role === "admin")        router.replace("/admin");
   }, [user, loading, router]);
@@ -192,12 +193,6 @@ export default function HomePage() {
               <span style={{fontSize:13,color:T.t2}}>{user.fullName}</span>
               {user.role === "customer" && (
                 <NavBtn href="/customer" label="My dashboard" ghost />
-              )}
-              {user.role === "designer" && (
-                <>
-                  <NavBtn href="/designer" label="Designer dashboard" ghost />
-                  <NavBtn href="/customer" label="My orders" ghost />
-                </>
               )}
               <NavBtn href="/auth/login" label="Sign Out" ghost />
             </>
