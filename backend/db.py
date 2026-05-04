@@ -12,13 +12,23 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
 from config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY
+
+logger = logging.getLogger("gigasouk.db")
 
 _db: Client | None = None
 _db_admin: Client | None = None
+
+# Supabase HTTP timeout in seconds.  The default (5 s) is too tight for cold
+# starts on Railway — the first query after a deploy hits a fresh PostgREST
+# connection and can easily take 10–15 s.  60 s gives plenty of headroom
+# without masking genuine hangs.
+_SUPABASE_TIMEOUT = 60
 
 
 def _supabase_env_msg() -> str:
@@ -31,18 +41,44 @@ def _supabase_env_msg() -> str:
 def _get_db() -> Client:
     global _db
     if _db is None:
-        if not (SUPABASE_URL or "").strip() or not (SUPABASE_ANON_KEY or "").strip():
+        url = (SUPABASE_URL or "").strip()
+        key = (SUPABASE_ANON_KEY or "").strip()
+        if not url or not key:
+            logger.error("Cannot create anon Supabase client — %s", _supabase_env_msg())
             raise RuntimeError(_supabase_env_msg())
-        _db = create_client(SUPABASE_URL.strip(), SUPABASE_ANON_KEY.strip())
+        logger.debug(
+            "Creating anon Supabase client  url=%s  timeout=%ds",
+            url,
+            _SUPABASE_TIMEOUT,
+        )
+        try:
+            _db = create_client(url, key, options=ClientOptions(postgrest_client_timeout=_SUPABASE_TIMEOUT))
+            logger.debug("Anon Supabase client created successfully")
+        except Exception:
+            logger.exception("Failed to create anon Supabase client")
+            raise
     return _db
 
 
 def _get_db_admin() -> Client:
     global _db_admin
     if _db_admin is None:
-        if not (SUPABASE_URL or "").strip() or not (SUPABASE_SERVICE_KEY or "").strip():
+        url = (SUPABASE_URL or "").strip()
+        key = (SUPABASE_SERVICE_KEY or "").strip()
+        if not url or not key:
+            logger.error("Cannot create admin Supabase client — %s", _supabase_env_msg())
             raise RuntimeError(_supabase_env_msg())
-        _db_admin = create_client(SUPABASE_URL.strip(), SUPABASE_SERVICE_KEY.strip())
+        logger.debug(
+            "Creating admin Supabase client  url=%s  timeout=%ds",
+            url,
+            _SUPABASE_TIMEOUT,
+        )
+        try:
+            _db_admin = create_client(url, key, options=ClientOptions(postgrest_client_timeout=_SUPABASE_TIMEOUT))
+            logger.debug("Admin Supabase client created successfully")
+        except Exception:
+            logger.exception("Failed to create admin Supabase client")
+            raise
     return _db_admin
 
 

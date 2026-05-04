@@ -6,6 +6,9 @@
 # ════════════════════════════════════════════════════════════════
 
 import warnings
+import logging
+import time
+import traceback
 
 # razorpay~=1.4.x imports setuptools.pkg_resources, which emits UserWarning on setuptools≥81.
 # Must run before any import that loads razorpay (services.razorpay_service).
@@ -21,8 +24,19 @@ warnings.filterwarnings(
     category=DeprecationWarning,
 )
 
+# ── Logging setup ────────────────────────────────────────────────
+# Configure root logger so all modules (db.py, routers, services)
+# emit structured output that Railway captures in its log stream.
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+logger = logging.getLogger("gigasouk.main")
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRouter
 from contextlib import asynccontextmanager
 
@@ -99,6 +113,61 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Request logging middleware ────────────────────────────────────
+# Logs every request start/end with method, path, status, and
+# elapsed time. This makes silent crashes visible in Railway logs
+# because we can see exactly which request was in-flight when the
+# worker died.
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    logger.info("→ %s %s", request.method, request.url.path)
+    try:
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "← %s %s  status=%d  %.1fms",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
+        return response
+    except Exception as exc:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.error(
+            "✗ %s %s  CRASHED after %.1fms — %s\n%s",
+            request.method,
+            request.url.path,
+            elapsed_ms,
+            exc,
+            traceback.format_exc(),
+        )
+        raise
+
+
+# ── Global exception handler ─────────────────────────────────────
+# Catches any unhandled exception that escapes a route handler and
+# logs the full traceback before returning a 500. Without this,
+# FastAPI swallows the error and Railway sees only a silent crash.
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(
+        "Unhandled exception on %s %s:\n%s",
+        request.method,
+        request.url.path,
+        traceback.format_exc(),
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "error": type(exc).__name__,
+            "message": str(exc),
+        },
+    )
 
 # ── /api/v1 — Feature Routers ────────────────────────────────────
 app.include_router(engine_router,     prefix="/api/v1", tags=["Routing & Orders"])
