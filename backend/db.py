@@ -12,10 +12,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY
+
+logger = logging.getLogger(__name__)
 
 _db: Client | None = None
 _db_admin: Client | None = None
@@ -34,6 +37,7 @@ def _get_db() -> Client:
         if not (SUPABASE_URL or "").strip() or not (SUPABASE_ANON_KEY or "").strip():
             raise RuntimeError(_supabase_env_msg())
         _db = create_client(SUPABASE_URL.strip(), SUPABASE_ANON_KEY.strip())
+        logger.info("Supabase client ready (anon)")
     return _db
 
 
@@ -43,6 +47,7 @@ def _get_db_admin() -> Client:
         if not (SUPABASE_URL or "").strip() or not (SUPABASE_SERVICE_KEY or "").strip():
             raise RuntimeError(_supabase_env_msg())
         _db_admin = create_client(SUPABASE_URL.strip(), SUPABASE_SERVICE_KEY.strip())
+        logger.info("Supabase client ready (service role)")
     return _db_admin
 
 

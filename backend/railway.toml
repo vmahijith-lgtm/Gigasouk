@@ -22,7 +22,8 @@ startCommand = '''sh -c "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-800
 # Railway pings this URL after deploy. If it returns non-200,
 # the deployment is rolled back.
 healthcheckPath    = "/health"
-healthcheckTimeout = 30          # seconds to wait for first 200
+# OpenCV + full router import chain can exceed 30s on cold start / small Railway plans.
+healthcheckTimeout = 120         # seconds to wait for first 200
 
 # ── Restart Policy ─────────────────────────────────────────────
 # Automatically restart if the process crashes.

@@ -21,12 +21,22 @@
 # ════════════════════════════════════════════════════════════════
 
 import asyncio
-import cv2
 import numpy as np
 import httpx
 from typing import Optional
 
 from config import QC_SCALE_MM_PER_PX, QC_TOLERANCE_MM
+
+# OpenCV is large — import only when QC actually runs so Railway /health can answer quickly.
+cv2 = None
+
+
+def _load_cv2():
+    global cv2
+    if cv2 is None:
+        import cv2 as cv2_mod
+
+        cv2 = cv2_mod
 
 # ── Master switch ─────────────────────────────────────────────────
 # Set True to bypass AI and send all QC to admin manual review.
@@ -69,6 +79,7 @@ async def run_qc_check(photo_urls: list[str], cad_url: str) -> dict:
         return _manual_fallback("No CAD reference image. Routing to manual review.")
 
     try:
+        _load_cv2()
         # ── Download CAD reference and all part photos concurrently ──
         urls_to_fetch = [cad_url] + [u for u in photo_urls if u]
         images = await _fetch_images_async(urls_to_fetch)

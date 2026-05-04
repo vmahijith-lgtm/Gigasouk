@@ -21,6 +21,9 @@ warnings.filterwarnings(
     category=DeprecationWarning,
 )
 
+import logging
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
@@ -52,6 +55,8 @@ from services.scheduler import start_scheduler, stop_scheduler, get_job_status
 from services.razorpay_service   import razorpay_webhook   # POST /webhooks/razorpay
 from services.shiprocket_service import shiprocket_webhook # POST /webhooks/shiprocket
 
+_req_log = logging.getLogger("gigasouk.request")
+
 # ── Build a clean, dedicated webhook router ───────────────────────
 # Each handler is registered once under /webhooks, separately from
 # the /api/v1 mounts, so there are zero duplicate operation IDs.
@@ -74,8 +79,10 @@ webhook_router.add_api_route(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── STARTUP ────────────────────────────────────────────────────
+    t0 = time.perf_counter()
     print(f"GigaSouk API starting — {APP_URL}")
     start_scheduler()   # ← launches all background jobs
+    print(f"GigaSouk API ready in {(time.perf_counter() - t0) * 1000:.0f}ms — listening")
     yield
     # ── SHUTDOWN ──────────────────────────────────────────────────
     stop_scheduler()    # ← graceful shutdown
@@ -89,6 +96,20 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        _req_log.exception("%s %s", request.method, request.url.path)
+        raise
+    ms = (time.perf_counter() - start) * 1000
+    _req_log.info("%s %s -> %s %.1fms", request.method, request.url.path, response.status_code, ms)
+    return response
+
 
 # ── CORS ─────────────────────────────────────────────────────────
 app.add_middleware(
