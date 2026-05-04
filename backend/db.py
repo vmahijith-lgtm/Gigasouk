@@ -16,9 +16,18 @@ import logging
 from typing import Any
 
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
+
 from config import SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY
 
 logger = logging.getLogger(__name__)
+
+# Default client PostgREST timeout is short; cold connections on Railway need headroom.
+POSTGREST_CLIENT_TIMEOUT_S = 60
+
+
+def _supabase_options() -> ClientOptions:
+    return ClientOptions(postgrest_client_timeout=POSTGREST_CLIENT_TIMEOUT_S)
 
 _db: Client | None = None
 _db_admin: Client | None = None
@@ -36,7 +45,22 @@ def _get_db() -> Client:
     if _db is None:
         if not (SUPABASE_URL or "").strip() or not (SUPABASE_ANON_KEY or "").strip():
             raise RuntimeError(_supabase_env_msg())
-        _db = create_client(SUPABASE_URL.strip(), SUPABASE_ANON_KEY.strip())
+        url = SUPABASE_URL.strip()
+        opts = _supabase_options()
+        logger.debug(
+            "create_client(anon) url=%s postgrest_client_timeout_s=%s",
+            url,
+            POSTGREST_CLIENT_TIMEOUT_S,
+        )
+        try:
+            _db = create_client(
+                url,
+                SUPABASE_ANON_KEY.strip(),
+                options=opts,
+            )
+        except Exception:
+            logger.exception("create_client(anon) failed")
+            raise
         logger.info("Supabase client ready (anon)")
     return _db
 
@@ -46,7 +70,22 @@ def _get_db_admin() -> Client:
     if _db_admin is None:
         if not (SUPABASE_URL or "").strip() or not (SUPABASE_SERVICE_KEY or "").strip():
             raise RuntimeError(_supabase_env_msg())
-        _db_admin = create_client(SUPABASE_URL.strip(), SUPABASE_SERVICE_KEY.strip())
+        url = SUPABASE_URL.strip()
+        opts = _supabase_options()
+        logger.debug(
+            "create_client(service) url=%s postgrest_client_timeout_s=%s",
+            url,
+            POSTGREST_CLIENT_TIMEOUT_S,
+        )
+        try:
+            _db_admin = create_client(
+                url,
+                SUPABASE_SERVICE_KEY.strip(),
+                options=opts,
+            )
+        except Exception:
+            logger.exception("create_client(service) failed")
+            raise
         logger.info("Supabase client ready (service role)")
     return _db_admin
 

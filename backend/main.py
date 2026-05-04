@@ -24,8 +24,16 @@ warnings.filterwarnings(
 import logging
 import time
 
+# Emit DEBUG from all loggers to Railway (diagnose silent request failures, cold Supabase, etc.)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+    force=True,
+)
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRouter
 from contextlib import asynccontextmanager
 
@@ -56,6 +64,7 @@ from services.razorpay_service   import razorpay_webhook   # POST /webhooks/razo
 from services.shiprocket_service import shiprocket_webhook # POST /webhooks/shiprocket
 
 _req_log = logging.getLogger("gigasouk.request")
+_err_log = logging.getLogger("gigasouk.errors")
 
 # ── Build a clean, dedicated webhook router ───────────────────────
 # Each handler is registered once under /webhooks, separately from
@@ -96,6 +105,23 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """
+    Log full tracebacks for unhandled errors and return JSON 500.
+    HTTPException and RequestValidationError use FastAPI's default handlers
+    (more specific) and do not reach this handler.
+    """
+    _err_log.exception("%s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "error_type": type(exc).__name__,
+        },
+    )
 
 
 @app.middleware("http")
