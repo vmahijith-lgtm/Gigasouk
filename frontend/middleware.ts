@@ -32,7 +32,7 @@ const ROLE_HOME: Record<string, string> = {
 function roleMayAccessRoute(role: string, pathname: string): boolean {
   if (role === "admin") return true;
   const rules: Record<string, string[]> = {
-    designer: ["/designer", "/negotiate"],
+    designer: ["/designer", "/negotiate", "/customer"],
     manufacturer: ["/manufacturer", "/negotiate"],
     customer: ["/customer", "/negotiate"],
   };

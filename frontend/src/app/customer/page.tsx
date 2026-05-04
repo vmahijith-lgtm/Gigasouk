@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════════
-// app/customer/page.tsx — Customer dashboard (location + orders + catalog)
+// app/customer/page.tsx — Buyer hub (customers + designers): location, orders, catalog
 // ════════════════════════════════════════════════════════════════
 "use client";
 
@@ -37,7 +37,7 @@ export default function CustomerDashboardPage() {
       router.replace("/auth/login?next=/customer");
       return;
     }
-    if (user.role !== "customer") {
+    if (user.role !== "customer" && user.role !== "designer") {
       router.replace("/");
       return;
     }
@@ -147,7 +147,7 @@ export default function CustomerDashboardPage() {
     }
   }
 
-  if (loading || !user || user.role !== "customer") {
+  if (loading || !user || (user.role !== "customer" && user.role !== "designer")) {
     return (
       <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.t3 }}>
         Loading…
@@ -165,9 +165,16 @@ export default function CustomerDashboardPage() {
             <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>My GigaSouk</h1>
             <p style={{ fontSize: 13, color: T.t3 }}>Saved location, orders, and designs with factory supply.</p>
           </div>
-          <Link href="/" style={{ color: T.green, fontSize: 14, fontWeight: 600 }}>
-            ← Shop catalog
-          </Link>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            {user.role === "designer" && (
+              <Link href="/designer" style={{ color: T.t2, fontSize: 14, fontWeight: 600 }}>
+                Designer dashboard →
+              </Link>
+            )}
+            <Link href="/" style={{ color: T.green, fontSize: 14, fontWeight: 600 }}>
+              ← Shop catalog
+            </Link>
+          </div>
         </div>
 
         {/* Preferred location */}

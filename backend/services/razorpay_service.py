@@ -2,7 +2,7 @@
 # services/razorpay_service.py — Payments and Escrow
 # Handles: create payment order, verify payment signature,
 #          release escrow to manufacturer, refund to customer.
-# All customer payment endpoints require a valid Supabase JWT;
+# Buyer payment endpoints (customer or designer) require a valid Supabase JWT;
 # admin release/refund require role=admin. Secrets never leave the server.
 # ════════════════════════════════════════════════════════════════
 
@@ -60,9 +60,10 @@ def _profile_from_jwt(authorization: Optional[str]):
     return profile
 
 
-def _require_customer(profile: dict) -> None:
-    if profile.get("role") != "customer":
-        raise HTTPException(403, "Only customers can use payment endpoints")
+def _require_order_buyer(profile: dict) -> None:
+    """Customers and designers may pay for orders where they are the buyer (customer_id)."""
+    if profile.get("role") not in ("customer", "designer"):
+        raise HTTPException(403, "Only customers and designers can use buyer payment endpoints")
 
 
 def _order_amount_paise(order: dict) -> int:
@@ -199,10 +200,10 @@ def create_payment(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Creates a Razorpay order. Caller must be the order's customer (JWT).
+    Creates a Razorpay order. Caller must be the order's buyer (JWT profile id = customer_id).
     """
     profile = _profile_from_jwt(authorization)
-    _require_customer(profile)
+    _require_order_buyer(profile)
     _ensure_razorpay_configured()
 
     order = get_one("orders", {"id": req.order_id})
@@ -266,7 +267,7 @@ async def verify_payment(
 ):
     """Verifies checkout session + HMAC, confirms payment with Razorpay API, then credits escrow."""
     profile = _profile_from_jwt(authorization)
-    _require_customer(profile)
+    _require_order_buyer(profile)
     _ensure_razorpay_configured()
 
     order = get_one("orders", {"id": req.order_id})

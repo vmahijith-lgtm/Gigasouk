@@ -4,13 +4,12 @@
 // ════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { getWalletTransactions, BACKEND_URL } from "../lib/api";
 import GigaSoukStagingArea from "./GigaSoukStagingArea";
 import NegotiationList from "./NegotiationList";
 import DesignMediaGallery from "./DesignMediaGallery";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 const C = {
   bg: "#060810", card: "#0C1018", card2: "#111826", border: "#1A2230",
@@ -28,6 +27,7 @@ const TABS = [
 ];
 
 export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
+  const router = useRouter();
   const [tab, setTab] = useState("staging");
   const [stats, setStats] = useState({});
   const [orders, setOrders] = useState([]);
@@ -85,6 +85,14 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
   const statusColor = { live: "#00E5A0", seeking: "#F5A623", committed: "#4A9EFF", draft: "#5A6A80", paused: "#F87171" };
 
   const actions = [
+    {
+      key: "shop",
+      label: "Shop & order",
+      desc: "Browse live products and buy from other designers (you cannot order your own listings).",
+      cta: "Open storefront →",
+      enabled: true,
+      onClick: () => router.push("/"),
+    },
     {
       key: "chat",
       label: "Chat",

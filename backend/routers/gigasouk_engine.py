@@ -277,15 +277,16 @@ async def place_order(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Customer places an order when at least one manufacturer has committed.
-    Customer identity comes from the JWT only (cannot spoof customer_id).
+    Customer or designer places an order when at least one manufacturer has committed.
+    Buyer identity comes from the JWT only (cannot spoof customer_id on the order row).
     """
     payload = verify_jwt(authorization)
     profile = get_one("profiles", {"auth_id": payload.get("sub")})
     if not profile:
         raise HTTPException(404, "Profile not found")
-    if profile.get("role") != "customer":
-        raise HTTPException(403, "Only customers can place orders")
+    role = profile.get("role")
+    if role not in ("customer", "designer"):
+        raise HTTPException(403, "Only customers and designers can place orders")
     customer_id = profile["id"]
 
     # ── Validate design ─────────────────────────────────────────
@@ -294,6 +295,8 @@ async def place_order(
         raise HTTPException(404, "Design not found")
     if design["status"] in (DESIGN_STATUS_DRAFT, DESIGN_STATUS_PAUSED):
         raise HTTPException(400, "Design is not available for ordering yet")
+    if role == "designer" and design.get("designer_id") == customer_id:
+        raise HTTPException(400, "You cannot place an order on your own design")
 
     # ── Find best factory from committed pool ────────────────────
     c_lat = req.delivery_address.get("lat", 0)
