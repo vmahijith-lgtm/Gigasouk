@@ -59,6 +59,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           expires_at,
           created_at,
           order_id,
+          commitment_id,
           designer_id,
           manufacturer_id,
           orders!order_id (
@@ -77,7 +78,23 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
       if (qErr) throw qErr;
 
       const list = [...(rows || [])];
-      const designIds = [...new Set(list.map((r) => r.orders?.design_id).filter(Boolean))];
+      const missingCommitment = list.filter((r) => !r.orders?.design_id && r.commitment_id);
+      let commitmentDesign = {};
+      if (missingCommitment.length) {
+        const cids = [...new Set(missingCommitment.map((r) => r.commitment_id))];
+        const { data: crows } = await supabase
+          .from("manufacturer_commitments")
+          .select("id, design_id")
+          .in("id", cids);
+        commitmentDesign = Object.fromEntries((crows || []).map((c) => [c.id, c.design_id]));
+      }
+      const designIds = [
+        ...new Set(
+          list
+            .map((r) => r.orders?.design_id || commitmentDesign[r.commitment_id])
+            .filter(Boolean),
+        ),
+      ];
       let byDesignId = {};
       if (designIds.length) {
         const { data: drows } = await supabase
@@ -111,7 +128,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
 
       setRooms(
         list.map((r) => {
-          const did = r.orders?.design_id;
+          const did = r.orders?.design_id || commitmentDesign[r.commitment_id];
           const design = did ? byDesignId[did] : null;
           return {
             ...r,
@@ -124,6 +141,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
             _designTitle: design?.title,
             _designSummary: design ? shortDesignChatLabel(design) : undefined,
             _previewImageUrl: design?.preview_image_url || null,
+            _preOrder: !r.orders?.order_ref,
           };
         })
       );
@@ -203,8 +221,8 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           No negotiations yet
         </p>
         <p style={{ fontSize: 13, lineHeight: 1.6 }}>
-          After you commit to a design, a conversation appears here once a customer places an order that routes to your
-          workshop. List order shows the newest order first; each row uses the design description and listing photo.
+          After your commitment is active, a negotiation chat opens here right away so you and the designer can align
+          before any customer orders. When someone checks out, the same thread keeps your history.
         </p>
       </div>
     );
@@ -356,8 +374,12 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
                       </p>
                     )}
                     <p style={{ fontSize: 12, color: C.t2, marginBottom: 2 }}>{counterpartyLabel(room)}</p>
-                    {room._orderRef && (
-                      <p style={{ fontSize: 11, color: C.t3 }}>Order {room._orderRef}</p>
+                    {room._preOrder ? (
+                      <p style={{ fontSize: 11, color: C.gold }}>Pre-order chat · no checkout yet</p>
+                    ) : (
+                      room._orderRef && (
+                        <p style={{ fontSize: 11, color: C.t3 }}>Order {room._orderRef}</p>
+                      )
                     )}
                   </div>
                 </div>

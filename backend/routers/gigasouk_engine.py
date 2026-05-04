@@ -356,19 +356,40 @@ async def place_order(
     }
     db_admin.table("orders").insert(order_data).execute()
 
-    # ── Create negotiation room ──────────────────────────────────
-    room_id = str(uuid.uuid4())
-    expires = datetime.now(timezone.utc) + timedelta(hours=NEGOTIATION_TIMEOUT_HOURS)
-    db_admin.table("negotiation_rooms").insert({
-        "id":              room_id,
-        "order_id":        order_id,
-        "designer_id":     design["designer_id"],
-        "manufacturer_id": manufacturer_id,
-        "base_price":      best["committed_price"],
-        "locked_price":    None,
-        "status":          "open",
-        "expires_at":      expires.isoformat(),
-    }).execute()
+    # ── Negotiation room: link existing pre-commitment room or create ──
+    pre_rows = (
+        db_admin.table("negotiation_rooms")
+        .select("id, order_id")
+        .eq("commitment_id", best["id"])
+        .limit(3)
+        .execute()
+        .data
+        or []
+    )
+    pre_room = next((r for r in pre_rows if not r.get("order_id")), None)
+
+    if pre_room:
+        room_id = pre_room["id"]
+        expires = datetime.now(timezone.utc) + timedelta(hours=NEGOTIATION_TIMEOUT_HOURS)
+        db_admin.table("negotiation_rooms").update({
+            "order_id":     order_id,
+            "base_price":   best["committed_price"],
+            "expires_at":   expires.isoformat(),
+        }).eq("id", room_id).execute()
+    else:
+        room_id = str(uuid.uuid4())
+        expires = datetime.now(timezone.utc) + timedelta(hours=NEGOTIATION_TIMEOUT_HOURS)
+        db_admin.table("negotiation_rooms").insert({
+            "id":              room_id,
+            "order_id":        order_id,
+            "commitment_id":   best["id"],
+            "designer_id":     design["designer_id"],
+            "manufacturer_id": manufacturer_id,
+            "base_price":      best["committed_price"],
+            "locked_price":    None,
+            "status":          "open",
+            "expires_at":      expires.isoformat(),
+        }).execute()
 
     # ── Link room back to order ───────────────────────────────────
     # Needed so queries like get_one("orders", {"negotiation_room_id": room_id}) work.

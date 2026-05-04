@@ -269,7 +269,9 @@ CREATE TABLE IF NOT EXISTS orders (
 
 CREATE TABLE IF NOT EXISTS negotiation_rooms (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id        UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    -- order_id set when customer checks out; NULL while designer ↔ mfr chat on commitment only
+    order_id        UUID REFERENCES orders(id) ON DELETE CASCADE,
+    commitment_id   UUID REFERENCES manufacturer_commitments(id) ON DELETE CASCADE,
     designer_id     UUID NOT NULL REFERENCES profiles(id),
     manufacturer_id UUID NOT NULL REFERENCES manufacturers(id),
     base_price      NUMERIC(10, 2) NOT NULL,
@@ -279,8 +281,13 @@ CREATE TABLE IF NOT EXISTS negotiation_rooms (
     expires_at      TIMESTAMPTZ NOT NULL,
     expired_at      TIMESTAMPTZ,
     locked_at       TIMESTAMPTZ,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT negotiation_room_has_anchor CHECK (order_id IS NOT NULL OR commitment_id IS NOT NULL)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_negotiation_rooms_one_per_commitment
+    ON negotiation_rooms (commitment_id)
+    WHERE commitment_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS bids (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
