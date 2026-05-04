@@ -45,6 +45,18 @@ function roleMayAccessRoute(role: string, pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!supabaseUrl || !supabaseAnon) {
+    console.error(
+      "[middleware] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY — set them in Vercel and redeploy.",
+    );
+    return new NextResponse(
+      "Configuration error: Supabase environment variables are not set. Check Vercel → Settings → Environment Variables.",
+      { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } },
+    );
+  }
+
   // Build a mutable response to forward cookies
   let response = NextResponse.next({
     request: { headers: request.headers },
@@ -52,8 +64,8 @@ export async function middleware(request: NextRequest) {
 
   // ── Create Supabase SSR client that can read cookies ───────────
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnon,
     {
       cookies: {
         getAll() {
