@@ -59,12 +59,16 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           expires_at,
           created_at,
           order_id,
+          commitment_id,
           designer_id,
           manufacturer_id,
           orders!order_id (
             order_ref,
             design_id,
             created_at
+          ),
+          manufacturer_commitments (
+            design_id
           )
         `
         )
@@ -77,7 +81,19 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
       if (qErr) throw qErr;
 
       const list = [...(rows || [])];
-      const designIds = [...new Set(list.map((r) => r.orders?.design_id).filter(Boolean))];
+      const designIds = [
+        ...new Set(
+          list
+            .map((r) => {
+              const oid = r.orders?.design_id;
+              if (oid) return oid;
+              const mc = r.manufacturer_commitments;
+              if (!mc) return null;
+              return Array.isArray(mc) ? mc[0]?.design_id : mc.design_id;
+            })
+            .filter(Boolean),
+        ),
+      ];
       let byDesignId = {};
       if (designIds.length) {
         const { data: drows } = await supabase
@@ -111,7 +127,11 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
 
       setRooms(
         list.map((r) => {
-          const did = r.orders?.design_id;
+          let did = r.orders?.design_id;
+          if (!did && r.manufacturer_commitments) {
+            const mc = r.manufacturer_commitments;
+            did = Array.isArray(mc) ? mc[0]?.design_id : mc.design_id;
+          }
           const design = did ? byDesignId[did] : null;
           return {
             ...r,
@@ -203,8 +223,9 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           No negotiations yet
         </p>
         <p style={{ fontSize: 13, lineHeight: 1.6 }}>
-          After you commit to a design, a conversation appears here once a customer places an order that routes to your
-          workshop. List order shows the newest order first; each row uses the design description and listing photo.
+          When your commitment is active, a dedicated chat opens with that design&apos;s designer (one thread per
+          workshop commitment). After a customer orders through your commitment, the same conversation continues with the
+          order attached. Each row uses the design description as the title when available, plus the listing photo.
         </p>
       </div>
     );

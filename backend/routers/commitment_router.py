@@ -32,6 +32,7 @@ from services.notify_service import (
     notify_designer_design_live,
     notify_manufacturer_regional_variant_needed,
 )
+from services.commitment_negotiation_room import ensure_negotiation_room_for_active_commitment
 
 router = APIRouter()
 
@@ -231,6 +232,9 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
         "committed_at":    datetime.now(timezone.utc).isoformat(),
     }).execute()
 
+    if not needs_approval:
+        ensure_negotiation_room_for_active_commitment(commitment_id)
+
     # If regional variant: create variant request for designer
     if needs_approval:
         variant_id = str(uuid.uuid4())
@@ -322,6 +326,7 @@ async def review_variant(
              "reviewer_notes": req.notes}
         )
         bg.add_task(_check_and_advance_design, variant["design_id"])
+        ensure_negotiation_room_for_active_commitment(variant["commitment_id"])
 
         return {"approved": True, "message": "Regional variant approved. Manufacturer is now active."}
 

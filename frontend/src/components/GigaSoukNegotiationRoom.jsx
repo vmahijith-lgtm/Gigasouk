@@ -85,7 +85,8 @@ export default function GigaSoukNegotiationRoom({
         .select(
           `
           *,
-          orders!order_id ( order_ref, design_id )
+          orders!order_id ( order_ref, design_id ),
+          manufacturer_commitments ( design_id )
         `
         )
         .eq("id", roomId)
@@ -123,7 +124,11 @@ export default function GigaSoukNegotiationRoom({
       setBidAmount(String(r.base_price ?? ""));
       let title = "";
       let designSummary = "";
-      const designId = r.orders?.design_id;
+      let designId = r.orders?.design_id;
+      if (!designId && r.manufacturer_commitments) {
+        const mc = r.manufacturer_commitments;
+        designId = Array.isArray(mc) ? mc[0]?.design_id : mc.design_id;
+      }
       if (designId) {
         const { data: drow } = await supabase
           .from("designs")
@@ -133,7 +138,7 @@ export default function GigaSoukNegotiationRoom({
         title = drow?.title || "";
         designSummary = drow ? shortDesignChatLabel(drow) : "";
       }
-      const ref = r.orders?.order_ref || "";
+      const ref = r.orders?.order_ref || (r.order_id ? "" : "Commitment chat");
       let cp = "";
       if (userRole === "designer") {
         const { data: mrow } = await supabase

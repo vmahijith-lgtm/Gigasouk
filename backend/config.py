@@ -80,7 +80,9 @@ COMMITMENT_SEEK_HOURS       = 48    # Hours before emergency broadcast fires
 REGIONAL_VARIANT_MAX_MARKUP = 0.50  # Regional price max 50% above base
 
 # ── Negotiation Room ─────────────────────────────────────────────
-NEGOTIATION_TIMEOUT_HOURS = 24   # Room expires after this
+NEGOTIATION_TIMEOUT_HOURS = 24   # Room expires after this (reset when an order is linked)
+# Designer ↔ manufacturer chat opens on commitment (before any order); allow a longer window.
+PRE_ORDER_NEGOTIATION_TIMEOUT_HOURS = 168  # 7 days
 MAX_BID_ROUNDS            = 20   # Max counter-offers allowed
 
 # ── QC Gate ──────────────────────────────────────────────────────
