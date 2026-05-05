@@ -22,14 +22,21 @@ warnings.filterwarnings(
 )
 
 import logging
+import os
 import time
 
-# Emit DEBUG from all loggers to Railway (diagnose silent request failures, cold Supabase, etc.)
+# Log level: INFO in production, DEBUG in local dev.
+# Set LOG_LEVEL=DEBUG in Railway env vars only when actively debugging — it floods
+# logs with hpack/httpcore internals and prints auth tokens in plain text.
+_log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=_log_level,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     force=True,
 )
+# Keep third-party HTTP/2 internals quiet even if LOG_LEVEL=DEBUG is set.
+for _noisy in ("hpack", "httpcore", "httpx"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
