@@ -49,7 +49,7 @@ function preferredToInitialAddress(
 
 /* ═══════════════════════════════════════════════════════════ */
 export default function HomePage() {
-  const { user, loading } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const [designs, setDesigns] = useState<Design[]>([]);
   const [search, setSearch] = useState("");
@@ -194,7 +194,14 @@ export default function HomePage() {
               {user.role === "customer" && (
                 <NavBtn href="/customer" label="My dashboard" ghost />
               )}
-              <NavBtn href="/auth/login" label="Sign Out" ghost />
+              <button
+                type="button"
+                onClick={() => signOut()}
+                style={{padding:"9px 20px",borderRadius:8,fontSize:13,fontWeight:600,
+                  cursor:"pointer",background:"transparent",color:T.t2,
+                  border:`1px solid ${T.border}`}}>
+                Sign Out
+              </button>
             </>
           ) : (
             <>

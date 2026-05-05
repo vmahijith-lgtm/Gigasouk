@@ -5,7 +5,7 @@
 // ════════════════════════════════════════════════════════════════
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { buildProfilePayload, postCreateProfile, type FormState } from "../../../lib/auth-utils";
@@ -47,8 +47,42 @@ function SignupForm() {
   const [hasSession, setHasSession] = useState(false);
   // sessionToken is intentionally NOT cached — always fetched fresh on submit
   const [sessionEmail, setSessionEmail] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  /** Once the user taps a role card, never overwrite from URL or async profile prep (avoids races). */
+  const roleEditedByUserRef = useRef(false);
+
+  /** Same browser profile shares one Supabase session across tabs — required for a truly new account. */
+  async function signOutForDifferentAccount() {
+    setSigningOut(true);
+    setError("");
+    try {
+      await supabase.auth.signOut();
+      sessionStorage.removeItem("pending_profile");
+      const qs = new URLSearchParams(searchParams.toString());
+      qs.delete("next");
+      const roleKeep = qs.get("role");
+      const tail =
+        roleKeep && ["customer", "designer", "manufacturer"].includes(roleKeep)
+          ? `?role=${encodeURIComponent(roleKeep)}`
+          : "";
+      window.location.href = `/auth/signup${tail}`;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not sign out.";
+      setError(msg);
+      setSigningOut(false);
+    }
+  }
+
+  function handleRoleSelect(nextRole: Role) {
+    roleEditedByUserRef.current = true;
+    setRole(nextRole);
+    const qs = new URLSearchParams(searchParams.toString());
+    qs.set("role", nextRole);
+    router.replace(`/auth/signup?${qs.toString()}`, { scroll: false });
+  }
 
   useEffect(() => {
+    if (roleEditedByUserRef.current) return;
     if (roleParam === "designer" || roleParam === "manufacturer" || roleParam === "customer") {
       setRole(roleParam);
     }
@@ -93,7 +127,10 @@ function SignupForm() {
           setSessionEmail(inferredEmail);
           if (inferredName) setFullName(inferredName);
           if (inferredEmail) setEmail(inferredEmail);
-          if (roleParam === "designer" || roleParam === "manufacturer") {
+          if (
+            !roleEditedByUserRef.current &&
+            (roleParam === "designer" || roleParam === "manufacturer")
+          ) {
             setRole(roleParam);
           }
           setSessionChecked(true);
@@ -275,6 +312,31 @@ function SignupForm() {
           </p>
         </div>
 
+        {hasSession && (
+          <div style={{
+            marginBottom: 20, padding: "12px 14px", borderRadius: 10,
+            border: `1px solid ${C.border}`, background: C.card2, fontSize: 12, color: C.t2, lineHeight: 1.45,
+          }}>
+            <p style={{ margin: "0 0 10px" }}>
+              You’re signed in as{" "}
+              <strong style={{ color: C.t1 }}>{sessionEmail || email || "this account"}</strong>.
+              New tabs use the same browser session, so “create account” continues this login unless you sign out.
+            </p>
+            <button
+              type="button"
+              disabled={signingOut}
+              onClick={signOutForDifferentAccount}
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 8, cursor: signingOut ? "wait" : "pointer",
+                border: `1px solid ${C.green}`, background: "transparent", color: C.green,
+                fontWeight: 700, fontSize: 13,
+              }}
+            >
+              {signingOut ? "Signing out…" : "Sign out & create a different account"}
+            </button>
+          </div>
+        )}
+
         {/* Role picker */}
         <p style={{
           fontSize: 11, fontWeight: 700, color: C.t3, textTransform: "uppercase",
@@ -282,7 +344,7 @@ function SignupForm() {
         }}>I am a…</p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 24 }}>
           {ROLE_OPTIONS.map(r => (
-            <button key={r.key} id={`role-${r.key}`} type="button" onClick={() => setRole(r.key)}
+            <button key={r.key} id={`role-${r.key}`} type="button" onClick={() => handleRoleSelect(r.key)}
               style={{
                 padding: "12px 8px", borderRadius: 10, cursor: "pointer", textAlign: "center",
                 border: `1px solid ${role === r.key ? C.green : C.border}`,
@@ -377,10 +439,30 @@ function SignupForm() {
         )}
 
         <p style={{ marginTop: 20, textAlign: "center", fontSize: 13, color: C.t3 }}>
-          {hasSession ? "Need another account?" : "Already have an account?"}{" "}
-          <a href="/auth/login" style={{ color: C.green, textDecoration: "none", fontWeight: 600 }}>
-            Sign in
-          </a>
+          {hasSession ? (
+            <>
+              Wrong account? Use{" "}
+              <button
+                type="button"
+                onClick={signOutForDifferentAccount}
+                disabled={signingOut}
+                style={{
+                  background: "none", border: "none", padding: 0, cursor: signingOut ? "wait" : "pointer",
+                  color: C.green, fontWeight: 600, fontSize: 13, textDecoration: "underline",
+                }}
+              >
+                Sign out
+              </button>
+              {" "}first, then register.
+            </>
+          ) : (
+            <>
+              Already have an account?{" "}
+              <a href="/auth/login" style={{ color: C.green, textDecoration: "none", fontWeight: 600 }}>
+                Sign in
+              </a>
+            </>
+          )}
         </p>
       </div>
     </div>
