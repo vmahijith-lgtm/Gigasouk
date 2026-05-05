@@ -79,7 +79,11 @@ async function signProductImagePaths(paths) {
     }
     const { data, error } = await supabase.storage.from("product-images").createSignedUrl(raw, 7200);
     const u = data?.signedUrl || data?.signedURL;
-    if (!error && u) urls.push(u);
+    if (error) {
+      console.warn("[signProductImagePaths] createSignedUrl failed for", raw, error.message);
+    } else if (u) {
+      urls.push(u);
+    }
   }
   return urls;
 }
@@ -193,7 +197,9 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
     })();
   }, [manufacturerId, jobsRefreshKey]);
 
-  // Resolve workshop photo paths to signed URLs so previews render in Active Jobs.
+  // Resolve workshop photo paths to signed URLs so previews render.
+  // Uses merge (not replace) so optimistically-set thumbs are never wiped
+  // if a subset of signing calls fail.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -204,7 +210,9 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         const urls = await signProductImagePaths(paths);
         if (urls.length) next[c.id] = urls;
       }
-      if (!cancelled) setShowcaseThumbs(next);
+      if (!cancelled && Object.keys(next).length > 0) {
+        setShowcaseThumbs(prev => ({ ...prev, ...next }));
+      }
     })();
     return () => {
       cancelled = true;
@@ -253,6 +261,13 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
       const merged = [...prevPaths, ...newPaths];
       await updateCommitmentShowcase(commitment.id, merged);
 
+      // Update local commitments state immediately so the "N photo(s) saved"
+      // count text appears without waiting for a full reload.
+      setCommitments(prev =>
+        prev.map(c => c.id === commitment.id ? { ...c, showcase_image_urls: merged } : c)
+      );
+
+      // Sign the newly uploaded paths and show thumbnails immediately.
       const signedNew = await signProductImagePaths(newPaths);
       if (signedNew.length) {
         setShowcaseThumbs((prev) => ({

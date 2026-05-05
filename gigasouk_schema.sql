@@ -1,20 +1,49 @@
 -- ════════════════════════════════════════════════════════════════
--- gigasouk_schema.sql — GigaSouk Complete Database Schema
+-- gigasouk_schema.sql — GigaSouk Single Authoritative Database Script
 -- Platform : GigaSouk Manufacturing-as-a-Service
 -- Domain   : gigasouk.com
--- HOW TO USE (fresh deploy OR re-run — safe either way):
---   1. Open your Supabase project
---   2. Click "SQL Editor" in the left sidebar
---   3. Paste this entire file
---   4. Click "Run"
---   Done. All tables, enums, indexes, triggers, RLS policies,
---   utility functions, and realtime config are created.
---   Re-running this file on an existing database is fully safe.
 --
---   Optional but recommended: run migrations/cascade_delete_on_auth_user.sql
---   (FK CASCADE + BEFORE DELETE trigger + Storage cleanup). For legacy rows left
---   after users were deleted earlier, run once:
---     SELECT public.gigasouk_purge_orphan_user_data();
+-- This file is the canonical merge of gigasouk_schema.sql and ALL
+-- migration files. Run this single file on a fresh Supabase project
+-- OR re-run it on an existing database — it is fully idempotent.
+--
+-- HOW TO USE:
+--   1. Open your Supabase project → SQL Editor
+--   2. Paste this entire file and click Run
+--   Done. All tables, enums, indexes, triggers, RLS policies,
+--   utility functions, auth cascade-delete, realtime config, and
+--   storage RLS are created or updated safely.
+--
+-- SECTION MAP:
+--   1.  Extensions
+--   2.  Enums
+--   3.  Core user tables         (profiles, manufacturers, designers)
+--   4.  Product tables           (designs, manufacturer_commitments,
+--                                 regional_price_variants, commitment_broadcasts)
+--   5.  Order tables             (orders, negotiation_rooms, bids)
+--   6.  Financial tables         (payouts, wallet_txns)
+--   7.  Communication tables     (messages, notification_log)
+--   8.  QC table                 (qc_records)
+--   9.  Indexes + Deferred FKs
+--   10. Triggers
+--   11. Auth cascade-delete      (from cascade_delete_on_auth_user.sql)
+--   12. Row Level Security       (all policies — recursion-safe)
+--   13. Realtime publication
+--   14. Utility functions + views
+--   15. Storage RLS              (from storage_rls.sql)
+--
+-- MIGRATIONS MERGED:
+--   add_preferred_delivery.sql
+--   add_product_gallery_images.sql
+--   cascade_delete_on_auth_user.sql
+--   designs_read_for_committed_manufacturers.sql
+--   fix_rls_designs_commitments_recursion.sql
+--   min_commits_one.sql
+--   negotiation_room_commitment.sql
+--   orders_read_own_manufacturer.sql
+--   realtime_designer_pipeline.sql
+--   safe_rls.sql
+--   storage_rls.sql
 -- ════════════════════════════════════════════════════════════════
 
 
@@ -28,8 +57,7 @@ CREATE EXTENSION IF NOT EXISTS "postgis";
 
 -- ════════════════════════════════════════════════════════════════
 -- SECTION 2: ENUMS
--- Each enum is created idempotently via DO blocks.
--- To add a new value in future: ALTER TYPE ... ADD VALUE IF NOT EXISTS
+-- Created inside DO blocks — fully idempotent.
 -- ════════════════════════════════════════════════════════════════
 
 DO $$ BEGIN
@@ -88,20 +116,24 @@ END $$;
 -- SECTION 3: CORE USER TABLES
 -- ════════════════════════════════════════════════════════════════
 
+-- preferred_delivery merged from add_preferred_delivery.sql
 CREATE TABLE IF NOT EXISTS profiles (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    auth_id         UUID UNIQUE,
-    full_name       TEXT NOT NULL,
-    email           TEXT UNIQUE NOT NULL,
-    phone           TEXT,
-    role            user_role NOT NULL DEFAULT 'customer',
-    avatar_url      TEXT,
-    wallet_balance  NUMERIC(12, 2) NOT NULL DEFAULT 0,
-    preferred_delivery JSONB NOT NULL DEFAULT '{}'::jsonb,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    auth_id             UUID UNIQUE,
+    full_name           TEXT NOT NULL,
+    email               TEXT UNIQUE NOT NULL,
+    phone               TEXT,
+    role                user_role NOT NULL DEFAULT 'customer',
+    avatar_url          TEXT,
+    wallet_balance      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    preferred_delivery  JSONB NOT NULL DEFAULT '{}'::jsonb,
+    is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+COMMENT ON COLUMN profiles.preferred_delivery IS
+    'Optional { line1, city, state, pincode, lat, lng } for customers';
 
 CREATE TABLE IF NOT EXISTS manufacturers (
     id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -144,9 +176,8 @@ CREATE TABLE IF NOT EXISTS designers (
 
 -- ════════════════════════════════════════════════════════════════
 -- SECTION 4: PRODUCT TABLES
--- NOTE: orders is declared before negotiation_rooms here so the
--- FK orders.negotiation_room_id can be added as a deferred
--- ALTER after negotiation_rooms is created (see Section 9).
+-- gallery_image_urls / showcase_image_urls merged from
+-- add_product_gallery_images.sql
 -- ════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS designs (
@@ -178,6 +209,7 @@ CREATE TABLE IF NOT EXISTS designs (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- showcase_image_urls merged from add_product_gallery_images.sql
 CREATE TABLE IF NOT EXISTS manufacturer_commitments (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     design_id           UUID NOT NULL REFERENCES designs(id) ON DELETE CASCADE,
@@ -226,9 +258,13 @@ CREATE TABLE IF NOT EXISTS commitment_broadcasts (
 
 -- ════════════════════════════════════════════════════════════════
 -- SECTION 5: ORDER TABLES
--- orders is created WITHOUT the negotiation_room_id FK here to
--- avoid a circular dependency with negotiation_rooms.
--- The FK is added idempotently in Section 9 (Indexes & FKs).
+-- orders is declared before negotiation_rooms to avoid a circular
+-- FK dependency. The circular FK (orders.negotiation_room_id →
+-- negotiation_rooms.id) is added idempotently in Section 9.
+--
+-- negotiation_rooms changes merged from negotiation_room_commitment.sql:
+--   • order_id is NULLABLE (pre-order rooms open at commitment time)
+--   • commitment_id FK column added
 -- ════════════════════════════════════════════════════════════════
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -267,9 +303,14 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- order_id is nullable so the room can exist before a customer order
+-- (pre-order designer ↔ manufacturer negotiation on commitment).
+-- commitment_id is populated at creation; order_id is set at checkout.
+-- Merged from negotiation_room_commitment.sql.
 CREATE TABLE IF NOT EXISTS negotiation_rooms (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    order_id        UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    order_id        UUID REFERENCES orders(id) ON DELETE CASCADE,
+    commitment_id   UUID REFERENCES manufacturer_commitments(id) ON DELETE CASCADE,
     designer_id     UUID NOT NULL REFERENCES profiles(id),
     manufacturer_id UUID NOT NULL REFERENCES manufacturers(id),
     base_price      NUMERIC(10, 2) NOT NULL,
@@ -281,6 +322,9 @@ CREATE TABLE IF NOT EXISTS negotiation_rooms (
     locked_at       TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+COMMENT ON COLUMN negotiation_rooms.commitment_id IS
+    'Active manufacturer commitment; room may exist before order_id is set at checkout.';
 
 CREATE TABLE IF NOT EXISTS bids (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -376,10 +420,9 @@ CREATE TABLE IF NOT EXISTS qc_records (
 
 
 -- ════════════════════════════════════════════════════════════════
--- SECTION 9: INDEXES & DEFERRED FOREIGN KEY
--- All indexes use IF NOT EXISTS — safe to re-run.
--- The circular FK orders → negotiation_rooms is added here,
--- after both tables exist, guarded by an existence check.
+-- SECTION 9: INDEXES + DEFERRED FOREIGN KEYS
+-- All CREATE INDEX use IF NOT EXISTS — safe to re-run.
+-- Deferred FKs are guarded by existence checks.
 -- ════════════════════════════════════════════════════════════════
 
 -- profiles
@@ -417,26 +460,16 @@ CREATE INDEX IF NOT EXISTS idx_orders_payment_status   ON orders(payment_status)
 CREATE INDEX IF NOT EXISTS idx_orders_created_at       ON orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_negotiation_room ON orders(negotiation_room_id);
 
--- Add FK from orders.negotiation_room_id → negotiation_rooms.id
--- Guarded: only adds the constraint if it does not already exist.
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.table_constraints
-        WHERE constraint_name = 'fk_orders_negotiation_room'
-          AND table_name = 'orders'
-          AND table_schema = current_schema()
-    ) THEN
-        ALTER TABLE orders
-            ADD CONSTRAINT fk_orders_negotiation_room
-            FOREIGN KEY (negotiation_room_id)
-            REFERENCES negotiation_rooms(id)
-            ON DELETE SET NULL;
-    END IF;
-END $$;
-
 -- negotiation_rooms
-CREATE INDEX IF NOT EXISTS idx_rooms_order_id ON negotiation_rooms(order_id);
-CREATE INDEX IF NOT EXISTS idx_rooms_status   ON negotiation_rooms(status);
+CREATE INDEX IF NOT EXISTS idx_rooms_order_id      ON negotiation_rooms(order_id);
+CREATE INDEX IF NOT EXISTS idx_rooms_status        ON negotiation_rooms(status);
+CREATE INDEX IF NOT EXISTS idx_rooms_commitment_id ON negotiation_rooms(commitment_id);
+
+-- One negotiation room per active commitment (partial unique index).
+-- Merged from negotiation_room_commitment.sql.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_negotiation_rooms_one_per_commitment
+    ON negotiation_rooms (commitment_id)
+    WHERE commitment_id IS NOT NULL;
 
 -- bids
 CREATE INDEX IF NOT EXISTS idx_bids_room_id ON bids(negotiation_room_id);
@@ -461,6 +494,23 @@ CREATE INDEX IF NOT EXISTS idx_payouts_order_id ON payouts(order_id);
 -- wallet_txns
 CREATE INDEX IF NOT EXISTS idx_wallet_txns_profile_id ON wallet_txns(profile_id);
 
+-- Deferred FK: orders.negotiation_room_id → negotiation_rooms.id
+-- Added here because both tables must exist first (circular dependency).
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'fk_orders_negotiation_room'
+          AND table_name = 'orders'
+          AND table_schema = current_schema()
+    ) THEN
+        ALTER TABLE orders
+            ADD CONSTRAINT fk_orders_negotiation_room
+            FOREIGN KEY (negotiation_room_id)
+            REFERENCES negotiation_rooms(id)
+            ON DELETE SET NULL;
+    END IF;
+END $$;
+
 
 -- ════════════════════════════════════════════════════════════════
 -- SECTION 10: TRIGGERS
@@ -468,7 +518,7 @@ CREATE INDEX IF NOT EXISTS idx_wallet_txns_profile_id ON wallet_txns(profile_id)
 -- Triggers use DROP IF EXISTS before CREATE — always safe.
 -- ════════════════════════════════════════════════════════════════
 
--- Auto-update updated_at timestamp on every row change
+-- Auto-update updated_at on every row change
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -526,7 +576,7 @@ CREATE TRIGGER trg_variant_diff
     BEFORE INSERT ON regional_price_variants
     FOR EACH ROW EXECUTE FUNCTION compute_variant_diff();
 
--- Auto-update active_commit_count on designs whenever a commitment status changes
+-- Auto-update active_commit_count on designs whenever a commitment changes
 CREATE OR REPLACE FUNCTION sync_commit_count()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -570,9 +620,216 @@ CREATE TRIGGER trg_sync_queue_depth
 
 
 -- ════════════════════════════════════════════════════════════════
--- SECTION 11: ROW LEVEL SECURITY (RLS)
+-- SECTION 11: AUTH CASCADE DELETE
+-- Merged from cascade_delete_on_auth_user.sql.
+-- Removes all application data when a Supabase Auth user is deleted.
+-- All functions use CREATE OR REPLACE — safe to re-run.
+-- Trigger uses DROP IF EXISTS before CREATE — safe to re-run.
+-- ════════════════════════════════════════════════════════════════
+
+-- Part A: Ensure FK constraints are named (idempotent drop + add)
+-- designs.designer_id already has ON DELETE CASCADE in Section 4,
+-- but we name the constraint explicitly so the trigger can rely on it.
+ALTER TABLE designs DROP CONSTRAINT IF EXISTS designs_designer_id_fkey;
+ALTER TABLE designs
+    ADD CONSTRAINT designs_designer_id_fkey
+    FOREIGN KEY (designer_id)
+    REFERENCES profiles(id)
+    ON DELETE CASCADE;
+
+-- orders.design_id already has ON DELETE CASCADE in Section 5.
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_design_id_fkey;
+ALTER TABLE orders
+    ADD CONSTRAINT orders_design_id_fkey
+    FOREIGN KEY (design_id)
+    REFERENCES designs(id)
+    ON DELETE CASCADE;
+
+-- Part B: Cleanup function — removes all rows for a given profile
+CREATE OR REPLACE FUNCTION public.gigasouk_delete_profile_data(p_profile_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    mfr_ids   uuid[];
+    order_ids uuid[];
+BEGIN
+    PERFORM set_config('row_security', 'off', true);
+
+    SELECT COALESCE(array_agg(id), ARRAY[]::uuid[])
+    INTO mfr_ids
+    FROM manufacturers
+    WHERE profile_id = p_profile_id;
+
+    -- regional_price_variants.manufacturer_id does not CASCADE on manufacturer delete
+    IF cardinality(mfr_ids) > 0 THEN
+        DELETE FROM regional_price_variants WHERE manufacturer_id = ANY (mfr_ids);
+    END IF;
+
+    DELETE FROM bids     WHERE bidder_id  = p_profile_id;
+    DELETE FROM messages WHERE sender_id  = p_profile_id;
+
+    SELECT COALESCE(array_agg(DISTINCT o.id), ARRAY[]::uuid[])
+    INTO order_ids
+    FROM orders o
+    WHERE o.customer_id = p_profile_id
+       OR o.design_id IN (SELECT id FROM designs WHERE designer_id = p_profile_id)
+       OR (cardinality(mfr_ids) > 0 AND o.manufacturer_id = ANY (mfr_ids));
+
+    IF cardinality(order_ids) > 0 THEN
+        DELETE FROM payouts WHERE order_id = ANY (order_ids);
+        DELETE FROM orders  WHERE id       = ANY (order_ids);
+    END IF;
+
+    UPDATE payouts    SET released_by    = NULL WHERE released_by    = p_profile_id;
+    UPDATE qc_records SET manual_admin_id = NULL WHERE manual_admin_id = p_profile_id;
+
+    DELETE FROM designs          WHERE designer_id  = p_profile_id;
+    DELETE FROM notification_log WHERE recipient_id = p_profile_id;
+    DELETE FROM wallet_txns      WHERE profile_id   = p_profile_id;
+    DELETE FROM profiles         WHERE id           = p_profile_id;
+END;
+$$;
+
+-- Part B: Trigger function — fires BEFORE DELETE on auth.users
+CREATE OR REPLACE FUNCTION public.gigasouk_on_auth_user_deleted()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, storage
+AS $$
+DECLARE
+    pid        uuid;
+    auth_email text;
+BEGIN
+    PERFORM set_config('row_security', 'off', true);
+
+    -- Remove storage objects whose path starts with the deleted auth uid
+    BEGIN
+        DELETE FROM storage.objects
+        WHERE split_part(name, '/', 1) = OLD.id::text;
+    EXCEPTION
+        WHEN OTHERS THEN
+            RAISE WARNING
+                'gigasouk_on_auth_user_deleted: storage.objects cleanup skipped: %',
+                SQLERRM;
+    END;
+
+    SELECT id INTO pid
+    FROM public.profiles
+    WHERE auth_id = OLD.id
+    LIMIT 1;
+
+    IF pid IS NULL THEN
+        auth_email := COALESCE(OLD.email::text, '');
+        IF auth_email <> '' THEN
+            SELECT p.id INTO pid
+            FROM public.profiles p
+            WHERE lower(trim(p.email)) = lower(trim(auth_email))
+            LIMIT 1;
+        END IF;
+    END IF;
+
+    IF pid IS NOT NULL THEN
+        PERFORM public.gigasouk_delete_profile_data(pid);
+    ELSE
+        RAISE WARNING
+            'gigasouk_on_auth_user_deleted: no public.profiles row for auth user % (email=%); app data not purged',
+            OLD.id,
+            COALESCE(OLD.email::text, '');
+    END IF;
+
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_gigasouk_auth_user_deleted ON auth.users;
+CREATE TRIGGER trg_gigasouk_auth_user_deleted
+    BEFORE DELETE ON auth.users
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.gigasouk_on_auth_user_deleted();
+
+-- Part C: One-time / periodic purge of orphan data
+-- Run manually: SELECT public.gigasouk_purge_orphan_user_data();
+CREATE OR REPLACE FUNCTION public.gigasouk_purge_orphan_user_data()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, storage
+AS $$
+DECLARE
+    r             record;
+    n_profiles    int     := 0;
+    n_storage     bigint  := 0;
+    auth_user_cnt bigint;
+BEGIN
+    SELECT count(*) INTO auth_user_cnt FROM auth.users;
+
+    IF auth_user_cnt = 0 THEN
+        RAISE EXCEPTION
+            'gigasouk_purge_orphan_user_data: auth.users is empty — refusing to delete all profiles';
+    END IF;
+
+    PERFORM set_config('row_security', 'off', true);
+
+    FOR r IN
+        SELECT p.id AS pid
+        FROM public.profiles p
+        WHERE p.auth_id IS NULL
+           OR NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.auth_id)
+    LOOP
+        PERFORM public.gigasouk_delete_profile_data(r.pid);
+        n_profiles := n_profiles + 1;
+    END LOOP;
+
+    BEGIN
+        PERFORM set_config('row_security', 'off', true);
+        DELETE FROM storage.objects o
+        WHERE split_part(o.name, '/', 1)
+                  ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          AND split_part(o.name, '/', 1) NOT IN (
+                  SELECT u.id::text FROM auth.users u
+              );
+        GET DIAGNOSTICS n_storage = ROW_COUNT;
+    EXCEPTION
+        WHEN undefined_table THEN
+            RAISE NOTICE 'gigasouk_purge_orphan_user_data: storage.objects not available';
+        WHEN OTHERS THEN
+            RAISE WARNING
+                'gigasouk_purge_orphan_user_data: storage purge skipped: %', SQLERRM;
+    END;
+
+    RETURN jsonb_build_object(
+        'purged_profiles',        n_profiles,
+        'purged_storage_objects', n_storage,
+        'auth_users_seen',        auth_user_cnt
+    );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.gigasouk_delete_profile_data(uuid)    FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.gigasouk_on_auth_user_deleted()        FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.gigasouk_purge_orphan_user_data()      FROM PUBLIC;
+
+COMMENT ON FUNCTION public.gigasouk_delete_profile_data(uuid) IS
+    'Deletes all GigaSouk rows for a profile (orders, designs, wallet, …). Used when auth.users row is deleted.';
+COMMENT ON FUNCTION public.gigasouk_purge_orphan_user_data() IS
+    'Removes public.* + storage keys for profiles whose auth_id is missing or not in auth.users. Run after cleaning up legacy deleted accounts.';
+
+
+-- ════════════════════════════════════════════════════════════════
+-- SECTION 12: ROW LEVEL SECURITY (RLS)
 -- ALTER TABLE ... ENABLE ROW LEVEL SECURITY is idempotent.
--- Policies use DROP IF EXISTS before CREATE — always safe.
+-- All policies use DROP IF EXISTS before CREATE.
+--
+-- design_visible_via_mfr_commitment() is a SECURITY DEFINER helper
+-- that breaks the infinite recursion between:
+--   designs_read_live  (references manufacturer_commitments)
+--   commitments_read_own (references designs)
+-- Merged from fix_rls_designs_commitments_recursion.sql and
+-- designs_read_for_committed_manufacturers.sql and safe_rls.sql.
 -- ════════════════════════════════════════════════════════════════
 
 ALTER TABLE profiles                 ENABLE ROW LEVEL SECURITY;
@@ -591,42 +848,9 @@ ALTER TABLE qc_records               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payouts                  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wallet_txns              ENABLE ROW LEVEL SECURITY;
 
--- ── profiles ─────────────────────────────────────────────────────
-DROP POLICY IF EXISTS "profiles_read_all"  ON profiles;
-DROP POLICY IF EXISTS "profiles_edit_own"  ON profiles;
-
-CREATE POLICY "profiles_read_all"
-    ON profiles FOR SELECT
-    USING (TRUE);
-
-CREATE POLICY "profiles_edit_own"
-    ON profiles FOR UPDATE
-    USING (auth.uid() = auth_id);
-
--- Sensitive profile columns: hidden from other users (owner reads via service-role /api/auth/me)
-REVOKE SELECT (email, phone, wallet_balance) ON profiles FROM anon;
-REVOKE SELECT (email, phone, wallet_balance) ON profiles FROM authenticated;
-
--- ── manufacturers — self read/update only (marketplace uses backend, not direct SELECT)
-DROP POLICY IF EXISTS "manufacturers_self_read" ON manufacturers;
-DROP POLICY IF EXISTS "manufacturers_self_update" ON manufacturers;
-
-CREATE POLICY "manufacturers_self_read"
-    ON manufacturers FOR SELECT
-    USING (
-        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
-    );
-
-CREATE POLICY "manufacturers_self_update"
-    ON manufacturers FOR UPDATE
-    USING (
-        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
-    );
-
--- ── designs ──────────────────────────────────────────────────────
--- designer_id references profiles(id), NOT auth.users — compare via profiles.auth_id
--- manufacturer-commitment branch uses a SECURITY DEFINER helper so RLS does not recurse
--- with commitments_read_own (see migrations/fix_rls_designs_commitments_recursion.sql).
+-- ── SECURITY DEFINER helper (must exist before policies reference it) ──
+-- Reads manufacturer_commitments with row_security=off to avoid the
+-- recursion: designs_read_live → commitments → designs_read_live.
 CREATE OR REPLACE FUNCTION public.design_visible_via_mfr_commitment(p_design_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -645,9 +869,64 @@ AS $$
   );
 $$;
 
-REVOKE ALL ON FUNCTION public.design_visible_via_mfr_commitment(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.design_visible_via_mfr_commitment(uuid) TO authenticated, anon, service_role;
+REVOKE ALL   ON FUNCTION public.design_visible_via_mfr_commitment(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.design_visible_via_mfr_commitment(uuid)
+    TO authenticated, anon, service_role;
 
+-- ── profiles ──────────────────────────────────────────────────────
+DROP POLICY IF EXISTS "profiles_read_all" ON profiles;
+DROP POLICY IF EXISTS "profiles_edit_own" ON profiles;
+
+CREATE POLICY "profiles_read_all"
+    ON profiles FOR SELECT
+    USING (TRUE);
+
+CREATE POLICY "profiles_edit_own"
+    ON profiles FOR UPDATE
+    USING (auth.uid() = auth_id);
+
+-- Hide sensitive columns from all non-owner callers.
+-- Owners read via backend /api/auth/me (service-role key, bypasses REVOKE).
+REVOKE SELECT (email, phone, wallet_balance) ON profiles FROM anon;
+REVOKE SELECT (email, phone, wallet_balance) ON profiles FROM authenticated;
+
+-- ── manufacturers ─────────────────────────────────────────────────
+-- No public SELECT — marketplace uses backend /api/v1/available-factories.
+DROP POLICY IF EXISTS "manufacturers_self_read"   ON manufacturers;
+DROP POLICY IF EXISTS "manufacturers_self_update" ON manufacturers;
+
+CREATE POLICY "manufacturers_self_read"
+    ON manufacturers FOR SELECT
+    USING (
+        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
+
+CREATE POLICY "manufacturers_self_update"
+    ON manufacturers FOR UPDATE
+    USING (
+        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
+
+-- ── designers ─────────────────────────────────────────────────────
+DROP POLICY IF EXISTS "designers_read_all" ON designers;
+DROP POLICY IF EXISTS "designers_edit_own" ON designers;
+
+CREATE POLICY "designers_read_all"
+    ON designers FOR SELECT
+    USING (TRUE);
+
+CREATE POLICY "designers_edit_own"
+    ON designers FOR UPDATE
+    USING (
+        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+    );
+
+-- Hide earnings from non-owners.
+REVOKE SELECT (total_earnings) ON designers FROM anon;
+REVOKE SELECT (total_earnings) ON designers FROM authenticated;
+
+-- ── designs ───────────────────────────────────────────────────────
+-- Uses design_visible_via_mfr_commitment() to avoid RLS recursion.
 DROP POLICY IF EXISTS "designs_read_live" ON designs;
 DROP POLICY IF EXISTS "designs_edit_own"  ON designs;
 
@@ -668,7 +947,45 @@ CREATE POLICY "designs_edit_own"
         designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
     );
 
--- ── orders ───────────────────────────────────────────────────────
+-- ── manufacturer_commitments ──────────────────────────────────────
+-- Does NOT reference designs in the USING clause to avoid recursion
+-- (designs_read_live already references manufacturer_commitments).
+DROP POLICY IF EXISTS "commitments_read_own" ON manufacturer_commitments;
+
+CREATE POLICY "commitments_read_own"
+    ON manufacturer_commitments FOR SELECT
+    USING (
+        manufacturer_id IN (
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        )
+        OR design_id IN (
+            SELECT id FROM designs
+            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        )
+    );
+
+-- ── regional_price_variants ───────────────────────────────────────
+DROP POLICY IF EXISTS "variants_read_own" ON regional_price_variants;
+
+CREATE POLICY "variants_read_own"
+    ON regional_price_variants FOR SELECT
+    USING (
+        design_id IN (
+            SELECT id FROM designs
+            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        )
+        OR manufacturer_id IN (
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        )
+    );
+
+-- ── commitment_broadcasts ─────────────────────────────────────────
+-- No SELECT policy — backend uses service key only (bypasses RLS).
+
+-- ── orders ────────────────────────────────────────────────────────
+-- Merged from safe_rls.sql (4a, 4a′) and orders_read_own_manufacturer.sql.
 DROP POLICY IF EXISTS "orders_read_own_customer"     ON orders;
 DROP POLICY IF EXISTS "orders_read_own_manufacturer" ON orders;
 
@@ -700,7 +1017,7 @@ CREATE POLICY "rooms_read_participants"
         )
     );
 
--- ── messages ─────────────────────────────────────────────────────
+-- ── messages ──────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "messages_read_participants" ON messages;
 DROP POLICY IF EXISTS "messages_insert_own"        ON messages;
 
@@ -723,54 +1040,7 @@ CREATE POLICY "messages_insert_own"
         sender_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
     );
 
--- ── manufacturer_commitments ─────────────────────────────────────
-DROP POLICY IF EXISTS "commitments_read_own" ON manufacturer_commitments;
-
-CREATE POLICY "commitments_read_own"
-    ON manufacturer_commitments FOR SELECT
-    USING (
-        manufacturer_id IN (
-            SELECT id FROM manufacturers
-            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
-        )
-        OR design_id IN (
-            SELECT id FROM designs
-            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
-        )
-    );
-
--- ── wallet_txns ───────────────────────────────────────────────────
-DROP POLICY IF EXISTS "wallet_read_own" ON wallet_txns;
-
-CREATE POLICY "wallet_read_own"
-    ON wallet_txns FOR SELECT
-    USING (
-        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
-    );
-
--- ── qc_records ───────────────────────────────────────────────────
-DROP POLICY IF EXISTS "qc_read_manufacturer"   ON qc_records;
-DROP POLICY IF EXISTS "qc_insert_manufacturer" ON qc_records;
-
-CREATE POLICY "qc_read_manufacturer"
-    ON qc_records FOR SELECT
-    USING (
-        manufacturer_id IN (
-            SELECT id FROM manufacturers
-            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
-        )
-    );
-
-CREATE POLICY "qc_insert_manufacturer"
-    ON qc_records FOR INSERT
-    WITH CHECK (
-        manufacturer_id IN (
-            SELECT id FROM manufacturers
-            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
-        )
-    );
-
--- ── bids ─────────────────────────────────────────────────────────
+-- ── bids ──────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "bids_read_participants" ON bids;
 DROP POLICY IF EXISTS "bids_insert_own"        ON bids;
 
@@ -822,26 +1092,17 @@ CREATE POLICY "payouts_read_manufacturer"
         )
     );
 
--- ── designers ────────────────────────────────────────────────────
-DROP POLICY IF EXISTS "designers_read_all"  ON designers;
-DROP POLICY IF EXISTS "designers_edit_own"  ON designers;
+-- ── wallet_txns ───────────────────────────────────────────────────
+-- Merged from safe_rls.sql (4b).
+DROP POLICY IF EXISTS "wallet_read_own" ON wallet_txns;
 
-CREATE POLICY "designers_read_all"
-    ON designers FOR SELECT
-    USING (TRUE);
-
-CREATE POLICY "designers_edit_own"
-    ON designers FOR UPDATE
+CREATE POLICY "wallet_read_own"
+    ON wallet_txns FOR SELECT
     USING (
-        profile_id IN (
-            SELECT id FROM profiles WHERE auth_id = auth.uid()
-        )
+        profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
     );
 
-REVOKE SELECT (total_earnings) ON designers FROM anon;
-REVOKE SELECT (total_earnings) ON designers FROM authenticated;
-
--- ── notification_log ─────────────────────────────────────────────
+-- ── notification_log ──────────────────────────────────────────────
 DROP POLICY IF EXISTS "notif_read_own" ON notification_log;
 
 CREATE POLICY "notif_read_own"
@@ -852,22 +1113,24 @@ CREATE POLICY "notif_read_own"
         )
     );
 
--- ── commitment_broadcasts — admin/backend only via service key ────
--- No SELECT policy: the anon/authenticated client never needs to
--- query this table directly. The Python backend uses the service key
--- which bypasses RLS entirely.
+-- ── qc_records ────────────────────────────────────────────────────
+-- Merged from safe_rls.sql (4j).
+DROP POLICY IF EXISTS "qc_read_manufacturer"   ON qc_records;
+DROP POLICY IF EXISTS "qc_insert_manufacturer" ON qc_records;
 
--- ── regional_price_variants ───────────────────────────────────────
-DROP POLICY IF EXISTS "variants_read_own" ON regional_price_variants;
-
-CREATE POLICY "variants_read_own"
-    ON regional_price_variants FOR SELECT
+CREATE POLICY "qc_read_manufacturer"
+    ON qc_records FOR SELECT
     USING (
-        design_id IN (
-            SELECT id FROM designs
-            WHERE designer_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
+        manufacturer_id IN (
+            SELECT id FROM manufacturers
+            WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
-        OR manufacturer_id IN (
+    );
+
+CREATE POLICY "qc_insert_manufacturer"
+    ON qc_records FOR INSERT
+    WITH CHECK (
+        manufacturer_id IN (
             SELECT id FROM manufacturers
             WHERE profile_id IN (SELECT id FROM profiles WHERE auth_id = auth.uid())
         )
@@ -875,8 +1138,9 @@ CREATE POLICY "variants_read_own"
 
 
 -- ════════════════════════════════════════════════════════════════
--- SECTION 12: REALTIME
+-- SECTION 13: REALTIME PUBLICATION
 -- Each ADD TABLE is guarded — safe to re-run.
+-- Includes tables from realtime_designer_pipeline.sql.
 -- ════════════════════════════════════════════════════════════════
 
 DO $$ BEGIN
@@ -921,6 +1185,7 @@ DO $$ BEGIN
     ) THEN ALTER PUBLICATION supabase_realtime ADD TABLE manufacturer_commitments; END IF;
 END $$;
 
+-- Merged from realtime_designer_pipeline.sql
 DO $$ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_publication_tables
@@ -937,12 +1202,14 @@ END $$;
 
 
 -- ════════════════════════════════════════════════════════════════
--- SECTION 13: UTILITY FUNCTIONS & VIEWS
+-- SECTION 14: UTILITY FUNCTIONS + VIEWS
 -- All functions use CREATE OR REPLACE — always safe.
 -- Views use CREATE OR REPLACE — always safe.
+-- can_design_go_live / maybe_advance_design_to_committed merged
+-- from min_commits_one.sql (min_commits constant = 1).
 -- ════════════════════════════════════════════════════════════════
 
--- Get designs a manufacturer can commit to (matches machine + material)
+-- Get designs a manufacturer can commit to (matches machine + material tags)
 CREATE OR REPLACE FUNCTION get_available_designs_for_manufacturer(mfr_id UUID)
 RETURNS TABLE (
     design_id           UUID,
@@ -984,7 +1251,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Check if a design has enough active commitments to go live
+-- Returns TRUE when the design has at least one active manufacturer commitment
 CREATE OR REPLACE FUNCTION can_design_go_live(p_design_id UUID)
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -1042,7 +1309,7 @@ $$ LANGUAGE plpgsql;
 
 
 -- Get committed manufacturers for a design, sorted by distance from customer
--- Uses the Haversine formula entirely in SQL (no PostGIS dependency).
+-- (Haversine formula — no PostGIS dependency)
 CREATE OR REPLACE FUNCTION get_committed_manufacturers(
     p_design_id    UUID,
     p_customer_lat NUMERIC,
@@ -1149,7 +1416,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Atomic wallet credit function (updates balance + inserts txn log)
+-- Atomic wallet credit (updates balance + inserts transaction log)
 CREATE OR REPLACE FUNCTION add_to_wallet(
     user_id UUID,
     amount  NUMERIC,
@@ -1175,10 +1442,10 @@ $$ LANGUAGE plpgsql;
 -- Designer stats aggregation
 CREATE OR REPLACE FUNCTION get_designer_stats(p_designer_id UUID)
 RETURNS TABLE (
-    total_designs         INTEGER,
-    live_designs          INTEGER,
-    seeking_designs       INTEGER,
-    total_orders          INTEGER,
+    total_designs          INTEGER,
+    live_designs           INTEGER,
+    seeking_designs        INTEGER,
+    total_orders           INTEGER,
     total_royalties_earned NUMERIC
 ) AS $$
 BEGIN
@@ -1289,10 +1556,168 @@ GROUP BY
 
 
 -- ════════════════════════════════════════════════════════════════
+-- SECTION 15: STORAGE RLS
+-- Merged from storage_rls.sql.
+-- Requires Storage buckets created in Supabase Dashboard first:
+--   cad-files       (private)
+--   design-previews (public OK)
+--   product-images  (private)
+--   qc-photos       (private)
+-- Path convention: {auth.uid()}/{subfolder}/{filename}
+-- ════════════════════════════════════════════════════════════════
+
+-- ── cad-files (private CAD uploads) ──────────────────────────────
+DROP POLICY IF EXISTS "gigasouk_cad_files_insert_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_cad_files_select_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_cad_files_update_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_cad_files_delete_own" ON storage.objects;
+
+CREATE POLICY "gigasouk_cad_files_insert_own"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'cad-files'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_cad_files_select_own"
+    ON storage.objects FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'cad-files'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_cad_files_update_own"
+    ON storage.objects FOR UPDATE TO authenticated
+    USING (
+        bucket_id = 'cad-files'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_cad_files_delete_own"
+    ON storage.objects FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'cad-files'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+-- ── design-previews (public catalogue thumbnails) ─────────────────
+DROP POLICY IF EXISTS "gigasouk_design_previews_public_read" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_design_previews_insert_own"  ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_design_previews_update_own"  ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_design_previews_delete_own"  ON storage.objects;
+
+-- Anyone can read preview images (shop / catalog)
+CREATE POLICY "gigasouk_design_previews_public_read"
+    ON storage.objects FOR SELECT TO public
+    USING (bucket_id = 'design-previews');
+
+CREATE POLICY "gigasouk_design_previews_insert_own"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'design-previews'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_design_previews_update_own"
+    ON storage.objects FOR UPDATE TO authenticated
+    USING (
+        bucket_id = 'design-previews'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_design_previews_delete_own"
+    ON storage.objects FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'design-previews'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+-- ── product-images (private — designer gallery + manufacturer showcase)
+-- Paths: {auth.uid()}/designs/{design_id}/{filename}
+--        {auth.uid()}/showcase/{commitment_id}/{filename}
+DROP POLICY IF EXISTS "gigasouk_product_images_insert_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_product_images_select_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_product_images_update_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_product_images_delete_own" ON storage.objects;
+
+CREATE POLICY "gigasouk_product_images_insert_own"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'product-images'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_product_images_select_own"
+    ON storage.objects FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'product-images'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_product_images_update_own"
+    ON storage.objects FOR UPDATE TO authenticated
+    USING (
+        bucket_id = 'product-images'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_product_images_delete_own"
+    ON storage.objects FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'product-images'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+-- ── qc-photos (private — manufacturer QC part photos) ─────────────
+-- Paths: {auth.uid()}/qc/{order_id}/{filename}
+DROP POLICY IF EXISTS "gigasouk_qc_photos_insert_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_qc_photos_select_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_qc_photos_update_own" ON storage.objects;
+DROP POLICY IF EXISTS "gigasouk_qc_photos_delete_own" ON storage.objects;
+
+CREATE POLICY "gigasouk_qc_photos_insert_own"
+    ON storage.objects FOR INSERT TO authenticated
+    WITH CHECK (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_qc_photos_select_own"
+    ON storage.objects FOR SELECT TO authenticated
+    USING (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_qc_photos_update_own"
+    ON storage.objects FOR UPDATE TO authenticated
+    USING (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+CREATE POLICY "gigasouk_qc_photos_delete_own"
+    ON storage.objects FOR DELETE TO authenticated
+    USING (
+        bucket_id = 'qc-photos'
+        AND split_part(name, '/', 1) = auth.uid()::text
+    );
+
+
+-- ════════════════════════════════════════════════════════════════
 -- DONE
--- This file is fully idempotent — safe to run on a fresh database
--- or re-run on an existing one without errors or data loss.
+-- gigasouk_schema.sql is fully idempotent — safe to run on a
+-- fresh database or re-run on an existing one without errors or
+-- data loss.
+--
 -- Execution order:
---   Extensions → Enums → Tables → Indexes + Deferred FK →
---   Triggers → RLS Policies → Realtime → Functions → Views
+--   Extensions → Enums → Tables → Indexes + Deferred FKs →
+--   Triggers → Auth cascade delete → RLS policies →
+--   Realtime → Utility functions + Views → Storage RLS
+--
+-- After running:
+--   1. Create Storage buckets in Dashboard if they don't exist:
+--      cad-files, design-previews, product-images, qc-photos
+--   2. To purge legacy orphan data (one-time):
+--      SELECT public.gigasouk_purge_orphan_user_data();
 -- ════════════════════════════════════════════════════════════════
