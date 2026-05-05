@@ -1,8 +1,10 @@
--- Manufacturers must read design metadata (title, preview) for designs they have committed to,
--- even when status is seeking/committed (not only live). Required for Active Jobs + embedded selects.
---
--- Uses design_visible_via_mfr_commitment() to avoid RLS recursion with manufacturer_commitments
--- (see fix_rls_designs_commitments_recursion.sql).
+-- ════════════════════════════════════════════════════════════════
+-- fix_rls_designs_commitments_recursion.sql
+-- Breaks infinite RLS recursion between:
+--   designs_read_live (OR … manufacturer_commitments …)
+--   commitments_read_own (OR … designs …)
+-- Triggered e.g. by: negotiation_rooms + embed manufacturer_commitments as designer.
+-- ════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.design_visible_via_mfr_commitment(p_design_id uuid)
 RETURNS boolean
@@ -26,7 +28,6 @@ REVOKE ALL ON FUNCTION public.design_visible_via_mfr_commitment(uuid) FROM PUBLI
 GRANT EXECUTE ON FUNCTION public.design_visible_via_mfr_commitment(uuid) TO authenticated, anon, service_role;
 
 DROP POLICY IF EXISTS "designs_read_live" ON designs;
-
 CREATE POLICY "designs_read_live"
     ON designs FOR SELECT
     USING (

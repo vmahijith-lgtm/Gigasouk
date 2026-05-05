@@ -55,6 +55,18 @@ function apiErrorDetail(e) {
   return String(d);
 }
 
+/** Workshop panel banner: green for capability save ("Saved…") and showcase upload ("Workshop photos saved…"). */
+function profileFlashIsSuccess(msg) {
+  if (!msg || typeof msg !== "string") return false;
+  const t = msg.trim();
+  return t.startsWith("Saved") || t.startsWith("Workshop photos saved");
+}
+
+/** Only after saving machine/material tags — not after showcase uploads. */
+function profileFlashShowBoardShortcut(msg) {
+  return typeof msg === "string" && msg.includes("Commitment Board list updates");
+}
+
 /** Signed view URLs for product-images paths (workshop folder). */
 async function signProductImagePaths(paths) {
   const urls = [];
@@ -591,13 +603,13 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
 
               {profileFlash && (
                 <div style={{
-                  background: profileFlash.startsWith("Saved") ? C.green + "18" : C.red + "18",
-                  border: `1px solid ${profileFlash.startsWith("Saved") ? C.green : C.red}`,
+                  background: profileFlashIsSuccess(profileFlash) ? C.green + "18" : C.red + "18",
+                  border: `1px solid ${profileFlashIsSuccess(profileFlash) ? C.green : C.red}`,
                   borderRadius: 10, padding: "12px 16px", marginBottom: 18, fontSize: 13,
-                  color: profileFlash.startsWith("Saved") ? C.green : C.red, lineHeight: 1.5,
+                  color: profileFlashIsSuccess(profileFlash) ? C.green : C.red, lineHeight: 1.5,
                 }}>
                   {profileFlash}
-                  {profileFlash.startsWith("Saved") && (
+                  {profileFlashShowBoardShortcut(profileFlash) && (
                     <button type="button" onClick={() => { setProfileFlash(""); setWorkshopOpen(false); setTab("board"); }}
                       style={{
                         display: "block", marginTop: 12, padding: "8px 14px", borderRadius: 8,
