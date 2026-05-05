@@ -10,6 +10,7 @@ import logging
 from typing import Optional, List
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Header, Query
+from fastapi.responses import JSONResponse
 
 from db import db_admin, get_one
 
@@ -452,11 +453,11 @@ def create_profile(
             raise HTTPException(500, f"Manufacturer profile creation failed: {str(e)}")
     
     # 7. Return success
-    return {
+    return JSONResponse(status_code=201, content={
         "profile_id": profile_id,
         "role": req.role,
-        "message": "profile_created"
-    }, 201
+        "message": "profile_created",
+    })
 
 
 # ════════════════════════════════════════════════════════════════

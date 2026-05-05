@@ -34,6 +34,7 @@ function CompleteContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const next = searchParams.get("next") ?? "/";
+    const roleParam = searchParams.get("role") ?? "";
 
     const [status, setStatus] = useState("Completing your signup...");
     const [error, setError] = useState("");
@@ -75,8 +76,10 @@ function CompleteContent() {
                         return;
                     }
 
-                    // OAuth first login without pending_profile: send user to onboarding.
-                    router.replace(`/auth/signup?next=${encodeURIComponent(next)}`);
+                    // OAuth first login without pending_profile: send user to
+                    // onboarding, forwarding the role they selected before OAuth.
+                    const roleQs = roleParam ? `role=${encodeURIComponent(roleParam)}&` : "";
+                    router.replace(`/auth/signup?${roleQs}next=${encodeURIComponent(next)}`);
                     setIsProcessing(false);
                     return;
                 }

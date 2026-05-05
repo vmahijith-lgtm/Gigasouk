@@ -174,12 +174,14 @@ function SignupForm() {
     }
 
     // 1. Create Supabase auth user
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        // Tell Supabase where to redirect after email confirmation
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        // Use NEXT_PUBLIC_SITE_URL so the link always points to the production
+        // domain (https://gigasouk.com) which is allowlisted in Supabase Auth.
+        emailRedirectTo: `${siteUrl}/auth/callback`,
       },
     });
     if (authErr || !authData.user) {
@@ -188,12 +190,7 @@ function SignupForm() {
       return;
     }
 
-    // 2. Build profile payload
-    const profilePayload = buildProfilePayload({
-      fullName, email, role, phone, shopName, city, state, pincode
-    });
-
-    // 3. If session exists (email confirm disabled), create profile immediately
+    // 2. If session exists (email confirm disabled), create profile immediately
     if (authData.session) {
       try {
         await postCreateProfile(authData.session.access_token, {
@@ -212,8 +209,12 @@ function SignupForm() {
       return;
     }
 
-    // 4. If no session (email confirm enabled), save to sessionStorage for callback/complete
-    sessionStorage.setItem("pending_profile", JSON.stringify(profilePayload));
+    // 3. Email confirm enabled — store camelCase FormState directly so
+    //    callback/complete/page.tsx can pass it straight to postCreateProfile()
+    //    without a second buildProfilePayload() call losing field names.
+    sessionStorage.setItem("pending_profile", JSON.stringify({
+      fullName, email, role, phone, shopName, city, state, pincode,
+    }));
     router.replace("/auth/verify");
   }
 
@@ -223,7 +224,10 @@ function SignupForm() {
 
     const next = searchParams.get("next") ?? "/";
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-    const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`;
+    // Pass `role` so callback/complete can forward it to /auth/signup if the
+    // user has no profile yet (Google OAuth first-time signup).
+    const redirectTo =
+      `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}&role=${encodeURIComponent(role)}`;
 
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",

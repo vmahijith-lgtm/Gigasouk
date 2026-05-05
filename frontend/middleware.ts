@@ -15,7 +15,11 @@ import { NextResponse, type NextRequest } from "next/server";
 const PROTECTED_PREFIXES = ["/designer", "/manufacturer", "/admin", "/negotiate", "/customer"];
 
 // ── Routes only accessible when NOT logged in ───────────────────
-const AUTH_ONLY_ROUTES = ["/auth/login", "/auth/signup"];
+// NOTE: /auth/signup is intentionally NOT listed here. Authenticated
+// customers must be able to reach /auth/signup?role=designer|manufacturer
+// to upgrade their role. The signup page's prepareSignupMode() handles
+// the "already logged in + already has role" redirect itself.
+const AUTH_ONLY_ROUTES = ["/auth/login"];
 
 // ── Routes needed while session exists but profile is incomplete ─
 const ONBOARDING_ALLOWED_PREFIXES = ["/auth/signup", "/auth/callback"];
