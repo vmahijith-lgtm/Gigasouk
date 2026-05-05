@@ -115,11 +115,11 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
     <div style={{ background: C.bg, minHeight: "100vh", padding: "20px 16px", fontFamily: "Inter,sans-serif", color: C.t1 }}>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
           <span style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>GIGA</span>
           <span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>SOUK</span>
-          <span style={{ fontSize: 12, color: C.t3, marginLeft: 10 }}>Designer Dashboard</span>
+          <span style={{ fontSize: 11, color: C.t3, marginLeft: 10 }}>Designer</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -163,7 +163,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
           ].map(s => (
             <div key={s.label} style={{
               background: C.card, border: `1px solid ${C.border}`,
-              borderRadius: 10, padding: "14px 16px"
+              borderRadius: 10, padding: "12px 14px"
             }}>
               <p style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.val}</p>
               <p style={{ fontSize: 11, color: C.t3, marginTop: 3 }}>{s.label}</p>
@@ -256,7 +256,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
       {/* ── EARNINGS TAB ─────────────────────────────────────────── */}
       {tab === "earnings" && (
         <div>
-          <div style={{
+            <div style={{
             background: C.card, border: `1px solid ${C.green}`, borderRadius: 10,
             padding: "20px 24px", marginBottom: 20
           }}>
@@ -264,8 +264,8 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
             <p style={{ fontSize: 32, fontWeight: 800, color: C.green }}>
               ₹{Number(wallet).toLocaleString("en-IN")}
             </p>
-            <p style={{ fontSize: 11, color: C.t3, marginTop: 10, lineHeight: 1.45 }}>
-              Royalties credit here after customer payment clears escrow on delivery. Transaction list is loaded via your authenticated session only (no third-party access).
+            <p style={{ fontSize: 11, color: C.t3, marginTop: 10, lineHeight: 1.4 }}>
+              Royalties are credited after delivery and escrow release.
             </p>
           </div>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Transaction history</h3>

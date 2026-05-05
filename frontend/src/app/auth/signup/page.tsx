@@ -298,16 +298,16 @@ function SignupForm() {
 
       <div style={{
         width: "100%", maxWidth: 460, background: C.card,
-        border: `1px solid ${C.border}`, borderRadius: 16, padding: "36px 32px"
+        border: `1px solid ${C.border}`, borderRadius: 14, padding: "30px 26px"
       }}>
 
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div>
             <span style={{ fontSize: 24, fontWeight: 800, color: C.t1 }}>GIGA</span>
             <span style={{ fontSize: 24, fontWeight: 800, color: C.green }}>SOUK</span>
           </div>
-          <p style={{ fontSize: 13, color: C.t3, marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: C.t3, marginTop: 4 }}>
             {hasSession ? "Complete your profile" : "Create your account"}
           </p>
         </div>

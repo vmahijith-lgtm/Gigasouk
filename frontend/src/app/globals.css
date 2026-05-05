@@ -10,9 +10,14 @@
   --card:        #0C1018;
   --card2:       #111826;
   --border:      #1A2230;
+  --border-soft: #263246;
   --t1:          #F4F6FC;
   --t2:          #B8C4D8;
   --t3:          #5A6A80;
+  --radius-sm:   8px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --shadow-soft: 0 8px 28px rgba(0, 0, 0, 0.2);
   color-scheme: dark;
 }
 
@@ -63,18 +68,23 @@ input:autofill {
 
 /* ── Reusable utility classes ─────────── */
 @layer components {
-  .gs-card   { @apply bg-[var(--card)] border border-[var(--border)] rounded-[10px]; }
+  .gs-card   { @apply bg-[var(--card)] border border-[var(--border)] rounded-[10px]; box-shadow: var(--shadow-soft); }
   .gs-card2  { @apply bg-[var(--card2)] border border-[var(--border)] rounded-[10px]; }
+  .gs-card-min { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); }
   .gs-tag    { @apply inline-flex items-center px-[10px] py-[2px] rounded-full text-[11px] font-semibold; }
-  .gs-btn    { @apply px-5 py-[10px] rounded-lg font-semibold text-sm cursor-pointer border-none transition-opacity duration-200; }
+  .gs-btn    { @apply px-5 py-[10px] rounded-lg font-semibold text-sm cursor-pointer border-none transition-opacity duration-200; border-radius: var(--radius-md); }
   .gs-btn:hover   { opacity: 0.88; }
   .gs-btn-green   { background: var(--brand); color: #060810; }
   .gs-btn-outline { background: transparent; border: 1px solid var(--border); color: var(--t2); }
+  .gs-btn-ghost   { background: transparent; border: 1px solid var(--border); color: var(--t3); }
+  .gs-btn-muted   { background: var(--card2); border: 1px solid var(--border); color: var(--t2); }
+  .gs-title       { font-size: 1.4rem; line-height: 1.25; font-weight: 800; letter-spacing: -0.01em; color: var(--t1); }
+  .gs-subtle      { font-size: 0.8125rem; line-height: 1.45; color: var(--t3); }
   /* Single style for all auth text/email/password fields — use className="gs-input" */
   .gs-input {
     width: 100%;
     box-sizing: border-box;
-    border-radius: 0.5rem;
+    border-radius: var(--radius-md);
     padding: 10px 14px;
     font-size: 0.875rem;
     line-height: 1.25rem;

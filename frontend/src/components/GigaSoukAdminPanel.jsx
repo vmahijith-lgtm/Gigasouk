@@ -153,11 +153,11 @@ export default function GigaSoukAdminPanel({ adminId, onSignOut }) {
     }}>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <span style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>GIGA</span>
           <span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>SOUK</span>
-          <span style={{ fontSize: 12, color: C.red, marginLeft: 10, fontWeight: 700 }}>ADMIN</span>
+          <span style={{ fontSize: 11, color: C.red, marginLeft: 10, fontWeight: 700 }}>ADMIN</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={handleEmergencyScan}
@@ -165,7 +165,7 @@ export default function GigaSoukAdminPanel({ adminId, onSignOut }) {
               padding: "7px 14px", borderRadius: 8, border: `1px solid ${C.gold}`,
               background: C.gold + "18", color: C.gold, fontWeight: 600, fontSize: 12, cursor: "pointer"
             }}>
-            ⚡ Emergency Scan
+            Emergency Scan
           </button>
           {onSignOut && (
             <button onClick={onSignOut}

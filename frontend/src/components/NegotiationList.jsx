@@ -214,7 +214,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
           color: C.t3,
           background: C.card2,
           border: `1px solid ${C.border}`,
-          borderRadius: 14,
+          borderRadius: 12,
           maxWidth: 520,
           margin: "0 auto",
         }}
@@ -222,10 +222,9 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
         <p style={{ fontSize: 16, fontWeight: 700, color: C.t1, marginBottom: 8 }}>
           No negotiations yet
         </p>
-        <p style={{ fontSize: 13, lineHeight: 1.6 }}>
-          When your commitment is active, a dedicated chat opens with that design&apos;s designer (one thread per
-          workshop commitment). After a customer orders through your commitment, the same conversation continues with the
-          order attached. Each row uses the design description as the title when available, plus the listing photo.
+        <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+          A chat appears when your commitment becomes active. One commitment creates one thread, and it continues after
+          customer order placement.
         </p>
       </div>
     );
@@ -235,7 +234,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: C.t3, marginBottom: 16, lineHeight: 1.55, maxWidth: 720 }}>
+      <p style={{ fontSize: 12, color: C.t3, marginBottom: 14, lineHeight: 1.5, maxWidth: 720 }}>
         Select a conversation on the left. You are connected <strong style={{ color: C.t2 }}>only</strong> with the
         designer or manufacturer on that order — messages sync in real time.
       </p>
@@ -325,7 +324,7 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
                     ) : (
-                      <span style={{ fontSize: 18, opacity: 0.35 }}>◆</span>
+                      <span style={{ fontSize: 15, opacity: 0.35 }}>◆</span>
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>

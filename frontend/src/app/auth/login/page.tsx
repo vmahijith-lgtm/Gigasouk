@@ -108,16 +108,16 @@ function LoginForm() {
       {/* Card */}
       <div style={{
         width: "100%", maxWidth: 420, background: C.card,
-        border: `1px solid ${C.border}`, borderRadius: 16, padding: "36px 32px"
+        border: `1px solid ${C.border}`, borderRadius: 14, padding: "30px 26px"
       }}>
 
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ textAlign: "center", marginBottom: 26 }}>
           <div style={{ marginBottom: 6 }}>
             <span style={{ fontSize: 26, fontWeight: 800, color: C.t1 }}>GIGA</span>
             <span style={{ fontSize: 26, fontWeight: 800, color: C.green }}>SOUK</span>
           </div>
-          <p style={{ fontSize: 13, color: C.t3 }}>Sign in to your account</p>
+          <p style={{ fontSize: 12, color: C.t3 }}>Sign in to your account</p>
         </div>
 
         {/* Info / Error banners */}

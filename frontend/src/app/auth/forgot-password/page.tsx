@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
 
       <div style={{
         width: "100%", maxWidth: 400, background: C.card,
-        border: `1px solid ${C.border}`, borderRadius: 16, padding: "36px 32px"
+        border: `1px solid ${C.border}`, borderRadius: 14, padding: "30px 26px"
       }}>
 
         {/* Logo */}
@@ -54,7 +54,6 @@ export default function ForgotPasswordPage() {
         {sent ? (
           /* ── Success state ──────────────────────────────────── */
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📧</div>
             <h1 style={{ fontSize: 20, fontWeight: 800, color: C.t1, marginBottom: 10 }}>
               Reset link sent
             </h1>

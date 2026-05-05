@@ -160,10 +160,10 @@ export default function CustomerDashboardPage() {
   return (
     <div style={{ background: T.bg, minHeight: "100vh", color: T.t1, fontFamily: "Inter, sans-serif", padding: "24px clamp(16px,4vw,40px)" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>My GigaSouk</h1>
-            <p style={{ fontSize: 13, color: T.t3 }}>Saved location, orders, and designs with factory supply.</p>
+            <p style={{ fontSize: 12, color: T.t3 }}>Saved location, orders, and payments.</p>
           </div>
           <Link href="/" style={{ color: T.green, fontSize: 14, fontWeight: 600 }}>
             ← Shop catalog
@@ -171,10 +171,10 @@ export default function CustomerDashboardPage() {
         </div>
 
         {/* Preferred location */}
-        <section style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 22, marginBottom: 22 }}>
+        <section style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Delivery location</h2>
-          <p style={{ fontSize: 13, color: T.t3, marginBottom: 16, lineHeight: 1.5 }}>
-            Add your current or preferred address. Checkout uses it to pick the <strong style={{ color: T.t2 }}>nearest committed factory</strong> automatically (you can still change factory on the map before paying).
+          <p style={{ fontSize: 12, color: T.t3, marginBottom: 14, lineHeight: 1.5 }}>
+            Save your address to prefill delivery and find the nearest committed factory faster.
           </p>
           {pd?.city && (
             <p style={{ fontSize: 12, color: T.t2, marginBottom: 12 }}>
@@ -196,8 +196,8 @@ export default function CustomerDashboardPage() {
         {/* Orders */}
         <section style={{ marginBottom: 28 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>Your orders and payments</h2>
-          <p style={{ fontSize: 12, color: T.t3, marginBottom: 12, lineHeight: 1.5 }}>
-            Pay with UPI or card via Razorpay. Your order price is set from the factory commitment when you check out; the designer and factory can still adjust it in negotiation until you pay. The publishable key comes from the server.
+          <p style={{ fontSize: 12, color: T.t3, marginBottom: 10, lineHeight: 1.5 }}>
+            Pay with UPI or card via Razorpay after the price is locked for your order.
           </p>
           {payMsg && (
             <p style={{ fontSize: 13, color: payMsg.startsWith("Payment received") ? T.green : "#F87171", marginBottom: 12 }}>

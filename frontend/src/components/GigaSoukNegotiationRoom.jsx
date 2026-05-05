@@ -468,17 +468,17 @@ export default function GigaSoukNegotiationRoom({
           <div style={{ flex: 1, minWidth: 0 }}>
             <p
               style={{
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: 800,
                 color: C.t1,
                 marginBottom: 4,
-                lineHeight: 1.35,
+                lineHeight: 1.3,
               }}
             >
               {meta.designSummary || meta.designTitle}
             </p>
             <p style={{ fontSize: 12, color: C.t2, marginBottom: 2 }}>{meta.counterpartyName}</p>
-            <p style={{ fontSize: 11, color: C.t3, lineHeight: 1.45 }}>
+            <p style={{ fontSize: 11, color: C.t3, lineHeight: 1.35 }}>
               {userRole === "designer" ? "Manufacturer" : "Designer"} · 1:1 on this order
             </p>
             {meta.designTitle &&

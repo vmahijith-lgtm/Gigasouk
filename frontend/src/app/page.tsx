@@ -161,12 +161,10 @@ export default function HomePage() {
       color:T.t1,
     }}>
       <style>{`
-        @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-        @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
         @keyframes slide-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
         .card-hover{transition:transform .2s,border-color .2s,box-shadow .2s}
-        .card-hover:hover{transform:translateY(-4px);border-color:#00E5A066!important;box-shadow:0 12px 40px #00E5A010}
-        .btn-green{transition:opacity .15s,transform .1s}.btn-green:hover{opacity:.88;transform:scale(1.02)}
+        .card-hover:hover{transform:translateY(-2px);border-color:#00E5A044!important;box-shadow:0 8px 24px #00000030}
+        .btn-green{transition:opacity .15s}.btn-green:hover{opacity:.9}
         .cat-btn{transition:all .15s}
       `}</style>
 
@@ -213,15 +211,7 @@ export default function HomePage() {
       </nav>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <section style={{position:"relative",overflow:"hidden",padding:`96px ${padX} 80px`,textAlign:"center"}}>
-        <div style={{position:"absolute",top:-100,left:"50%",transform:"translateX(-50%)",
-          width:600,height:600,borderRadius:"50%",
-          background:"radial-gradient(circle,#00E5A018 0%,transparent 70%)",pointerEvents:"none"}}/>
-        <div style={{position:"absolute",top:80,left:"10%",width:200,height:200,borderRadius:"50%",
-          background:"radial-gradient(circle,#4A9EFF0A 0%,transparent 70%)",pointerEvents:"none"}}/>
-        <div style={{position:"absolute",top:40,right:"8%",width:160,height:160,borderRadius:"50%",
-          background:"radial-gradient(circle,#A78BFA0A 0%,transparent 70%)",pointerEvents:"none"}}/>
-
+      <section style={{position:"relative",overflow:"hidden",padding:`88px ${padX} 70px`,textAlign:"center"}}>
         <div style={{animation:"slide-up .7s ease both"}}>
           <p style={{fontSize:11,fontWeight:700,color:T.green,letterSpacing:".14em",
             textTransform:"uppercase",marginBottom:16}}>
@@ -232,7 +222,7 @@ export default function HomePage() {
             Products made by factories{" "}
             <span style={{color:T.green,position:"relative"}}>near you</span>
           </h1>
-          <p style={{fontSize:18,color:T.t2,maxWidth:500,margin:"0 auto 36px",lineHeight:1.7}}>
+          <p style={{fontSize:16,color:T.t2,maxWidth:500,margin:"0 auto 30px",lineHeight:1.6}}>
             Pick your factory on the map. AI scores the nearest options.
             Quality checked by computer vision. Money released only on delivery.
           </p>
@@ -247,20 +237,9 @@ export default function HomePage() {
             <NavBtn href="/auth/signup" label="Become a Designer →" ghost />
           </div>
 
-          <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
-            {[
-              {icon:"🏭",label:"500+ MSME Factories"},
-              {icon:"🗺️",label:"Map-based Routing"},
-              {icon:"🤖",label:"AI Quality Gate"},
-              {icon:"🔒",label:"Razorpay Escrow"},
-              {icon:"♻️",label:"Zero Inventory"},
-            ].map(b=>(
-              <span key={b.label} style={{fontSize:12,color:T.t3,padding:"6px 14px",
-                border:`1px solid ${T.border}`,borderRadius:20,display:"flex",gap:6,alignItems:"center"}}>
-                {b.icon} {b.label}
-              </span>
-            ))}
-          </div>
+          <p style={{fontSize:12,color:T.t3,maxWidth:620,margin:"0 auto"}}>
+            500+ partner factories · map-based routing · AI quality checks · escrow-safe payments
+          </p>
         </div>
       </section>
 
@@ -270,9 +249,9 @@ export default function HomePage() {
           gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}}>
           {[
             {val:"500+",label:"Partner Factories",color:T.green},
-            {val:"±0.5mm",label:"AI QC Tolerance",color:T.blue},
-            {val:"48h",label:"Max Route Time",color:T.gold},
-            {val:"100%",label:"Escrow Protected",color:T.purple},
+            {val:"±0.5mm",label:"AI QC Tolerance",color:T.t2},
+            {val:"48h",label:"Max Route Time",color:T.t2},
+            {val:"100%",label:"Escrow Protected",color:T.t2},
           ].map(s=>(
             <div key={s.label} className="card-hover"
               style={{background:T.card,border:`1px solid ${T.border}`,

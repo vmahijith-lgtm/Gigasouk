@@ -578,11 +578,11 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         <div ref={workshopPanelRef}
           style={{
             marginBottom: 24,
-            borderRadius: 14,
+            borderRadius: 12,
             border: `1px solid ${C.green}44`,
             background: C.card,
             overflow: "hidden",
-            boxShadow: `0 16px 48px rgba(0,0,0,.35)`,
+            boxShadow: `0 10px 28px rgba(0,0,0,.24)`,
           }}>
           <div style={{
             display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -592,7 +592,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
             <div>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: C.t1, margin: 0 }}>Workshop Profile</h2>
               <p style={{ fontSize: 12, color: C.t3, margin: "6px 0 0", maxWidth: 560 }}>
-                Landscape layout — tags & save on the left; location & shop summary on the right (stacks on narrow screens).
+                Configure capabilities and location used for routing.
               </p>
             </div>
             <button type="button" onClick={() => setWorkshopOpen(false)}
@@ -610,7 +610,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
               padding: "20px 22px",
               minWidth: 0,
             }}>
-              <p style={{ fontSize: 13, color: C.t3, lineHeight: 1.65, marginBottom: 18 }}>
+              <p style={{ fontSize: 12, color: C.t3, lineHeight: 1.5, marginBottom: 14 }}>
                 Each design lists required <strong style={{ color: C.blue }}>machine</strong> and{" "}
                 <strong style={{ color: C.green }}>material</strong> tags. You only see a job when your workshop includes{" "}
                 <em>every</em> tag on that design.
@@ -699,7 +699,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
 
             {/* Right column — location & summary */}
             <div style={{ padding: "20px 22px", minWidth: 0, background: C.bg }}>
-              <p style={{ fontSize: 12, color: C.t3, marginBottom: 14, lineHeight: 1.55 }}>
+              <p style={{ fontSize: 12, color: C.t3, marginBottom: 12, lineHeight: 1.45 }}>
                 <strong style={{ color: C.t2 }}>Location</strong> — routing & map. City-level is fine; exact pins stay private until an order exists.
               </p>
               <div style={{ marginBottom: 20 }}>
