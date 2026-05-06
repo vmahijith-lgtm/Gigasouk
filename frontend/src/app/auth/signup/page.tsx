@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { buildProfilePayload, postCreateProfile, type FormState } from "../../../lib/auth-utils";
+import BrandLogo from "../../../components/BrandLogo";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -303,9 +304,8 @@ function SignupForm() {
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div>
-            <span style={{ fontSize: 24, fontWeight: 800, color: C.t1 }}>GIGA</span>
-            <span style={{ fontSize: 24, fontWeight: 800, color: C.green }}>SOUK</span>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <BrandLogo width={142} height={36} />
           </div>
           <p style={{ fontSize: 12, color: C.t3, marginTop: 4 }}>
             {hasSession ? "Complete your profile" : "Create your account"}

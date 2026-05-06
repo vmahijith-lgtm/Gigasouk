@@ -9,6 +9,7 @@ import { getWalletTransactions, BACKEND_URL } from "../lib/api";
 import GigaSoukStagingArea from "./GigaSoukStagingArea";
 import NegotiationList from "./NegotiationList";
 import DesignMediaGallery from "./DesignMediaGallery";
+import BrandLogo from "./BrandLogo";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -117,8 +118,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <span style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>GIGA</span>
-          <span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>SOUK</span>
+          <BrandLogo width={112} height={28} />
           <span style={{ fontSize: 11, color: C.t3, marginLeft: 10 }}>Designer</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>

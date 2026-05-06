@@ -12,6 +12,7 @@ import {
   releaseEscrow, refundPayment,
   triggerEmergencyScan
 } from "../lib/api";
+import BrandLogo from "./BrandLogo";
 
 const C = {
   bg: "#060810", card: "#0C1018", card2: "#111826", border: "#1A2230",
@@ -155,8 +156,7 @@ export default function GigaSoukAdminPanel({ adminId, onSignOut }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <span style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>GIGA</span>
-          <span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>SOUK</span>
+          <BrandLogo width={112} height={28} />
           <span style={{ fontSize: 11, color: C.red, marginLeft: 10, fontWeight: 700 }}>ADMIN</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

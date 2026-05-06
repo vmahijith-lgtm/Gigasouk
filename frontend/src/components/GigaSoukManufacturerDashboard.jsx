@@ -20,6 +20,7 @@ import { ManufacturerOrderMap } from "./MapComponents";
 import LocationPicker from "./LocationPicker";
 import NegotiationList from "./NegotiationList";
 import DesignMediaGallery from "./DesignMediaGallery";
+import BrandLogo from "./BrandLogo";
 
 // Fetch a 60-minute signed URL for a design's CAD file
 async function fetchCadUrl(designId) {
@@ -507,8 +508,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <span style={{ fontSize: 18, fontWeight: 800, color: C.t1 }}>GIGA</span>
-          <span style={{ fontSize: 18, fontWeight: 800, color: C.green }}>SOUK</span>
+          <BrandLogo width={112} height={28} />
           <span style={{ fontSize: 12, color: C.t3, marginLeft: 10 }}>Manufacturer</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>

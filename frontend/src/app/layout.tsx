@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   title:       "GigaSouk — Cloud Factory Infrastructure for India",
   description: "Order custom-manufactured products made locally. AI-routed, escrow-secured, quality-verified.",
   metadataBase: new URL("https://gigasouk.com"),
+  icons: {
+    icon: "/brand/logo.svg",
+    shortcut: "/brand/logo.svg",
+    apple: "/brand/logo.svg",
+  },
   openGraph: {
     title:       "GigaSouk",
     description: "India's Manufacturing OS",

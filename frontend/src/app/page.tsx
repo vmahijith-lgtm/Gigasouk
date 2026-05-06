@@ -10,6 +10,7 @@ import { useAuth } from "../lib/auth-context";
 import { getCatalogDesigns } from "../lib/api";
 import type { DeliveryAddress } from "../components/MapComponents";
 import DesignMediaGallery from "../components/DesignMediaGallery";
+import BrandLogo from "../components/BrandLogo";
 
 // Lazy-load factory picker (loads Google Maps JS for address autocomplete only)
 const FactoryFinderMap = lazy(() => import("../components/FactoryFinderMap"));
@@ -174,10 +175,7 @@ export default function HomePage() {
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",
         rowGap:12,padding:`14px ${padX}`}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div>
-            <span style={{fontSize:20,fontWeight:900,color:T.t1,letterSpacing:"-0.5px"}}>GIGA</span>
-            <span style={{fontSize:20,fontWeight:900,color:T.green,letterSpacing:"-0.5px"}}>SOUK</span>
-          </div>
+          <BrandLogo width={128} height={32} />
           <span style={{fontSize:11,color:T.t3,padding:"3px 10px",border:`1px solid ${T.border}`,
             borderRadius:20,letterSpacing:".06em"}}>BETA</span>
         </div>
@@ -408,9 +406,8 @@ export default function HomePage() {
       {/* ── Footer ──────────────────────────────────────────────── */}
       <footer style={{padding:`24px ${padX}`,borderTop:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
-        <div>
-          <span style={{fontSize:16,fontWeight:900,color:T.t1}}>GIGA</span>
-          <span style={{fontSize:16,fontWeight:900,color:T.green}}>SOUK</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <BrandLogo width={100} height={25} />
           <p style={{fontSize:12,color:T.t3,marginTop:2}}>
             © 2026 · Cloud Factory Infrastructure for India
           </p>

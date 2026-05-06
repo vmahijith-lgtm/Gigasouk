@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import BrandLogo from "../../../components/BrandLogo";
 
 const C = {
   bg: "#060810", card: "#0C1018", card2: "#111826", border: "#1A2230",
@@ -46,9 +47,8 @@ export default function ForgotPasswordPage() {
       }}>
 
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <span style={{ fontSize: 22, fontWeight: 800, color: C.t1 }}>GIGA</span>
-          <span style={{ fontSize: 22, fontWeight: 800, color: C.green }}>SOUK</span>
+        <div style={{ textAlign: "center", marginBottom: 24, display: "flex", justifyContent: "center" }}>
+          <BrandLogo width={136} height={34} />
         </div>
 
         {sent ? (
