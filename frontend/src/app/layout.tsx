@@ -12,7 +12,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title:       "GigaSouk — Cloud Factory Infrastructure for India",
+  title: "GigaSouk — Cloud Factory Infrastructure for India",
   description: "Order custom-manufactured products made locally. AI-routed, escrow-secured, quality-verified.",
   metadataBase: new URL("https://gigasouk.com"),
   icons: {
@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     apple: "/brand/logo.svg",
   },
   openGraph: {
-    title:       "GigaSouk",
+    title: "GigaSouk",
     description: "India's Manufacturing OS",
-    url:         "https://gigasouk.com",
-    siteName:    "GigaSouk",
+    url: "https://gigasouk.com",
+    siteName: "GigaSouk",
   },
 };
 
