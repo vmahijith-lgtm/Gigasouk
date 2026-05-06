@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   description: "Order custom-manufactured products made locally. AI-routed, escrow-secured, quality-verified.",
   metadataBase: new URL("https://gigasouk.com"),
   icons: {
-    icon: "/brand/logo.svg",
-    shortcut: "/brand/logo.svg",
-    apple: "/brand/logo.svg",
+    icon: "/brand/logo.png",
+    shortcut: "/brand/logo.png",
+    apple: "/brand/logo.png",
   },
   openGraph: {
     title: "GigaSouk",

@@ -13,7 +13,7 @@ export default function BrandLogo({
 }: BrandLogoProps) {
   return (
     <Image
-      src="/brand/logo.svg"
+      src="/brand/logo.png"
       alt={alt}
       width={width}
       height={height}
