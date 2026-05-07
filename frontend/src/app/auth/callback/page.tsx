@@ -27,14 +27,16 @@ function CallbackHandler() {
 
     const code = params.get("code");
     const next = params.get("next") ?? "/";
+    const role = params.get("role") ?? "";
     const nextEncoded = encodeURIComponent(next);
+    const roleQs = role ? `&role=${encodeURIComponent(role)}` : "";
 
     // Belt-and-braces: if the browser already has a session (e.g. the
     // first useEffect invocation finished before cleanup), skip the
     // exchange entirely and go straight to the completion page.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        router.replace(`/auth/callback/complete?next=${nextEncoded}`);
+        router.replace(`/auth/callback/complete?next=${nextEncoded}${roleQs}`);
         return;
       }
 
@@ -46,7 +48,7 @@ function CallbackHandler() {
             // created the session. Check once before giving up.
             supabase.auth.getSession().then(({ data: { session: retry } }) => {
               if (retry) {
-                router.replace(`/auth/callback/complete?next=${nextEncoded}`);
+                router.replace(`/auth/callback/complete?next=${nextEncoded}${roleQs}`);
               } else {
                 console.error("OAuth exchange failed:", error);
                 router.replace("/auth/login?error=session_failed");
@@ -54,7 +56,7 @@ function CallbackHandler() {
             });
             return;
           }
-          router.replace(`/auth/callback/complete?next=${nextEncoded}`);
+          router.replace(`/auth/callback/complete?next=${nextEncoded}${roleQs}`);
         });
       } else {
         // ── Implicit flow: token arrives in URL hash ───────────────
@@ -63,7 +65,7 @@ function CallbackHandler() {
           (event, sess) => {
             if (event === "SIGNED_IN" && sess) {
               subscription.unsubscribe();
-              router.replace(`/auth/callback/complete?next=${nextEncoded}`);
+              router.replace(`/auth/callback/complete?next=${nextEncoded}${roleQs}`);
             } else if (event === "SIGNED_OUT") {
               subscription.unsubscribe();
               router.replace("/auth/login?error=session_failed");

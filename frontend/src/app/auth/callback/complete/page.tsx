@@ -13,6 +13,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { postCreateProfile, type FormState } from "@/lib/auth-utils";
+import { BACKEND_URL } from "@/lib/api";
 
 const ROLE_HOME: Record<string, string> = {
     designer: "/designer",
@@ -61,16 +62,31 @@ function CompleteContent() {
                 if (!pendingProfileJson) {
                     // No pending profile — this might be a page refresh.
                     // Check if profile already exists and just redirect.
-                    const user = session.user;
-                    const { data: profile } = await supabase
-                        .from("profiles")
-                        .select("role")
-                        .eq("auth_id", user.id)
-                        .single();
+                    let existingRole = "";
+                    try {
+                        const meRes = await fetch(`${BACKEND_URL}/api/auth/me`, {
+                            headers: { Authorization: `Bearer ${session.access_token}` },
+                        });
+                        if (meRes.ok) {
+                            const mePayload = await meRes.json();
+                            existingRole = mePayload?.profile?.role || "";
+                        }
+                    } catch {
+                        // Fall back to direct profile lookup if backend is unreachable.
+                    }
+                    if (!existingRole) {
+                        const user = session.user;
+                        const { data: profile } = await supabase
+                            .from("profiles")
+                            .select("role")
+                            .eq("auth_id", user.id)
+                            .single();
+                        existingRole = profile?.role || "";
+                    }
 
-                    if (profile) {
+                    if (existingRole) {
                         // Profile exists — redirect to dashboard
-                        const destination = ROLE_HOME[profile.role] ?? next;
+                        const destination = ROLE_HOME[existingRole] ?? next;
                         window.location.assign(destination);
                         setIsProcessing(false);
                         return;

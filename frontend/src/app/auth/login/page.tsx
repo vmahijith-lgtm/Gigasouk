@@ -9,6 +9,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import BrandLogo from "../../../components/BrandLogo";
+import { BACKEND_URL } from "../../../lib/api";
 
 const C = {
   bg: "#060810", card: "#0C1018", card2: "#111826", border: "#1A2230",
@@ -36,6 +37,30 @@ function LoginForm() {
     if (msg === "signed_out") setInfo("You've been signed out successfully.");
   }, [params]);
 
+  async function resolveRole(accessToken?: string | null, authId?: string): Promise<string | null> {
+    if (accessToken) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (res.ok) {
+          const payload = await res.json();
+          const role = payload?.profile?.role;
+          if (typeof role === "string" && role) return role;
+        }
+      } catch {
+        // Fall back to direct Supabase query when backend is temporarily unreachable.
+      }
+    }
+    if (!authId) return null;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("auth_id", authId)
+      .single();
+    return typeof profile?.role === "string" ? profile.role : null;
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -49,14 +74,7 @@ function LoginForm() {
       return;
     }
 
-    // Fetch role from profiles table
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("auth_id", data.user.id)
-      .single();
-
-    const role = profile?.role;
+    const role = await resolveRole(data.session?.access_token, data.user.id);
 
     // Respect ?next= redirect param (set by middleware when blocking an unauthenticated visit)
     // Treat "/" as "no explicit destination" so role homes win for non-customers.
