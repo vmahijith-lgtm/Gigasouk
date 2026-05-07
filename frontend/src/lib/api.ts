@@ -83,6 +83,8 @@ export const updateCommitmentShowcase = (
   showcase_image_urls: string[],
 ) =>
   api.patch(`/api/v1/commitments/${commitmentId}/showcase`, { showcase_image_urls });
+export const withdrawCommitment = (commitmentId: string) =>
+  api.delete(`/api/v1/commitments/${commitmentId}`);
 export const deleteDesign       = (designId: string, designerId: string) =>
   api.delete(`/api/v1/designs/${designId}`, { params: { designer_id: designerId } });
 

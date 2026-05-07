@@ -12,6 +12,7 @@ import {
   updateOrderStatus,
   getMyCommitments,
   updateCommitmentShowcase,
+  withdrawCommitment,
   BACKEND_URL,
 } from "../lib/api";
 import { MACHINE_OPTIONS, MATERIAL_OPTIONS } from "../lib/workshop-tags";
@@ -129,6 +130,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [jobsRefreshKey, setJobsRefreshKey] = useState(0);
   const [showcaseBusy, setShowcaseBusy] = useState(null);
+  const [removingCommitmentId, setRemovingCommitmentId] = useState(null);
   /** commitment id → signed URLs for immediate thumbnails (storage paths are not viewable in <img> alone). */
   const [showcaseThumbs, setShowcaseThumbs] = useState({});
   const [jobs, setJobs] = useState([]);
@@ -307,6 +309,24 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
       setProfileFlash(msg || "Could not save. Try again.");
     } finally {
       setTagSaving(false);
+    }
+  }
+
+  async function handleWithdrawCommitment(commitment) {
+    const ok = window.confirm(
+      `Remove your commitment for "${commitment.designs?.title || "this design"}"?\n\nThis is blocked if active orders already use it.`,
+    );
+    if (!ok) return;
+    setRemovingCommitmentId(commitment.id);
+    try {
+      await withdrawCommitment(commitment.id);
+      setJobsRefreshKey((k) => k + 1);
+      setBoardRefreshKey((k) => k + 1);
+      setProfileFlash("Commitment removed.");
+    } catch (e) {
+      setProfileFlash(apiErrorDetail(e) || "Could not remove commitment.");
+    } finally {
+      setRemovingCommitmentId(null);
     }
   }
 
@@ -930,6 +950,25 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                           border: `1px solid ${col}55`,
                           borderRadius: 20, padding: "2px 10px",
                         }}>{statusLabel}</span>
+                        {["pending_approval", "active", "paused"].includes(st) && (
+                          <button
+                            type="button"
+                            disabled={removingCommitmentId === c.id}
+                            onClick={() => handleWithdrawCommitment(c)}
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: 20,
+                              border: `1px solid ${C.red}66`,
+                              background: C.red + "16",
+                              color: C.red,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: removingCommitmentId === c.id ? "wait" : "pointer",
+                            }}
+                          >
+                            {removingCommitmentId === c.id ? "Removing…" : "Remove"}
+                          </button>
+                        )}
                       </div>
                       <p style={{ fontSize: 15, fontWeight: 700, color: C.t1, marginBottom: 4 }}>{c.designs?.title}</p>
                       <p style={{ fontSize: 13, color: C.t2, marginBottom: 4 }}>

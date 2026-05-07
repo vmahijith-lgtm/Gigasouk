@@ -26,6 +26,7 @@ import {
   createDesign,
   getDesignerDesigns,
   updateDesignGallery,
+  deleteDesign,
 } from "../lib/api";
 import { MACHINE_OPTIONS, MATERIAL_OPTIONS } from "../lib/workshop-tags";
 import DesignMediaGallery from "./DesignMediaGallery";
@@ -180,6 +181,20 @@ export default function GigaSoukStagingArea({ designerId }) {
       flash("Design is now live in the shop!");
     } catch (e) {
       flash(e?.response?.data?.detail || "Could not publish design.", "error");
+    }
+  }
+
+  async function handleDeleteDesign(design) {
+    const ok = window.confirm(
+      `Delete "${design.title}"?\n\nThis is permanent and only works when the design is still eligible for deletion.`,
+    );
+    if (!ok) return;
+    try {
+      await deleteDesign(design.id, designerId);
+      await loadPipeline();
+      flash("Design deleted.");
+    } catch (e) {
+      flash(e?.response?.data?.detail || "Could not delete design.", "error");
     }
   }
 
@@ -476,6 +491,25 @@ export default function GigaSoukStagingArea({ designerId }) {
                       <span style={{ fontSize: 12, color: C.blue, whiteSpace: "nowrap" }}>
                         Awaiting approval…
                       </span>
+                    )}
+                    {(design.status === "draft" || design.status === "paused") && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDesign(design)}
+                        style={{
+                          padding: "8px 14px",
+                          borderRadius: 8,
+                          border: `1px solid ${C.red}66`,
+                          background: C.red + "18",
+                          color: C.red,
+                          fontWeight: 700,
+                          fontSize: 12,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Delete
+                      </button>
                     )}
                   </div>
                 </div>

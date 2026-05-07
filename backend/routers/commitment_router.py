@@ -464,6 +464,73 @@ def get_my_commitments(authorization: Optional[str] = Header(None)):
 
 
 # ════════════════════════════════════════════════════════════════
+# ENDPOINT: WITHDRAW MY COMMITMENT
+# DELETE /api/v1/commitments/{commitment_id}
+# ════════════════════════════════════════════════════════════════
+
+@router.delete("/commitments/{commitment_id}")
+def withdraw_my_commitment(
+    commitment_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Authenticated manufacturer only (JWT).
+    Removes a commitment row when it is still safe to withdraw:
+      • owned by caller manufacturer
+      • status in pending_approval / active / paused
+      • no active orders attached to this commitment
+    """
+    payload = verify_jwt(authorization)
+    uid = payload.get("sub")
+    if not uid:
+        raise HTTPException(401, "Invalid token")
+
+    profile = get_one("profiles", {"auth_id": uid})
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+    if profile.get("role") != "manufacturer":
+        raise HTTPException(403, "Manufacturers only")
+
+    mfr = get_one("manufacturers", {"profile_id": profile["id"]})
+    if not mfr:
+        raise HTTPException(404, "Manufacturer profile not found")
+
+    commitment = get_one("manufacturer_commitments", {"id": commitment_id})
+    if not commitment:
+        raise HTTPException(404, "Commitment not found")
+    if commitment.get("manufacturer_id") != mfr["id"]:
+        raise HTTPException(403, "Not your commitment")
+
+    allowed_statuses = {"pending_approval", "active", "paused"}
+    st = commitment.get("status") or ""
+    if st not in allowed_statuses:
+        raise HTTPException(
+            400,
+            f"Commitment in '{st}' status cannot be removed.",
+        )
+
+    all_orders = (
+        db_admin.table("orders")
+        .select("id, status")
+        .eq("commitment_id", commitment_id)
+        .execute()
+        .data
+    ) or []
+    active_orders = [
+        o for o in all_orders
+        if (o.get("status") or "") not in ("cancelled", "refunded")
+    ]
+    if active_orders:
+        raise HTTPException(
+            400,
+            "Cannot remove commitment with active orders.",
+        )
+
+    db_admin.table("manufacturer_commitments").delete().eq("id", commitment_id).execute()
+    return {"deleted": True, "commitment_id": commitment_id}
+
+
+# ════════════════════════════════════════════════════════════════
 # ENDPOINT: MANUFACTURER PRODUCT / SHOWCASE PHOTOS (storage paths)
 # PATCH /api/v1/commitments/{commitment_id}/showcase
 # ════════════════════════════════════════════════════════════════
