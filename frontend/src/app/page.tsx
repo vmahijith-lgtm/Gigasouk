@@ -188,7 +188,7 @@ export default function HomePage() {
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",
         rowGap:12,padding:`14px ${padX}`}}>
         <div style={{display:"flex",alignItems:"center"}}>
-          <BrandLogo width={82} height={20} />
+          <BrandLogo width={52} height={52} />
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",minHeight:36}}>
           {loading ? (
@@ -238,7 +238,19 @@ export default function HomePage() {
                 color:T.bg,fontWeight:800,fontSize:15,cursor:"pointer"}}>
               Browse Products ↓
             </button>
-            <NavBtn href="/auth/signup" label="Become a Designer →" ghost />
+            <a href="/auth/signup?role=designer"
+              style={{
+                padding:"14px 28px",
+                borderRadius:10,
+                border:`1px solid ${T.green}66`,
+                color:T.green,
+                fontWeight:700,
+                fontSize:14,
+                textDecoration:"none",
+                background:T.card,
+              }}>
+              Become a Designer
+            </a>
           </div>
 
         </div>
@@ -374,7 +386,7 @@ export default function HomePage() {
       <footer style={{padding:`24px ${padX}`,borderTop:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <BrandLogo width={74} height={18} />
+          <BrandLogo width={36} height={36} />
           <p style={{fontSize:12,color:T.t3,marginTop:2}}>
             © 2026 · Cloud Factory Infrastructure for India
           </p>
