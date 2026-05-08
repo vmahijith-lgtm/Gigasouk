@@ -26,6 +26,58 @@ api.interceptors.request.use(async (config) => {
 
 // ── Public catalog (service role on server; no auth required) ────
 export const getCatalogDesigns = () => api.get("/api/v1/catalog/designs");
+const CATALOG_CACHE_KEY = "gs:catalog:v1";
+const CATALOG_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+let catalogInflight: Promise<any> | null = null;
+
+function readCatalogCache(): any[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CATALOG_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts?: number; data?: any[] };
+    if (!parsed?.ts || !Array.isArray(parsed.data)) return null;
+    if (Date.now() - parsed.ts > CATALOG_CACHE_TTL_MS) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeCatalogCache(data: any[]) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    // ignore storage write errors (private mode/quota)
+  }
+}
+
+/**
+ * Catalog cache for faster page transitions:
+ * - returns warm cache immediately when available
+ * - deduplicates concurrent network calls
+ * - keeps API-compatible response shape: { data }
+ */
+export async function getCatalogDesignsCached(opts?: { forceRefresh?: boolean }): Promise<{ data: any[] }> {
+  const forceRefresh = !!opts?.forceRefresh;
+  if (!forceRefresh) {
+    const cached = readCatalogCache();
+    if (cached) return { data: cached };
+  }
+  if (!catalogInflight) {
+    catalogInflight = getCatalogDesigns()
+      .then((res) => {
+        const payload = Array.isArray(res?.data) ? res.data : [];
+        writeCatalogCache(payload);
+        return { data: payload };
+      })
+      .finally(() => {
+        catalogInflight = null;
+      });
+  }
+  return catalogInflight;
+}
 
 // ── Customer profile (preferred delivery) ────────────────────────
 export const updatePreferredDelivery = (data: object) =>

@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../lib/auth-context";
 import { supabase } from "../../lib/supabase";
-import { getCatalogDesigns, updatePreferredDelivery, createPayment, verifyPayment } from "../../lib/api";
+import { getCatalogDesignsCached, updatePreferredDelivery, createPayment, verifyPayment } from "../../lib/api";
 import { loadRazorpayCheckout } from "../../lib/razorpay-checkout";
 import { AddressAutocomplete, type DeliveryAddress } from "../../components/MapComponents";
 import DesignMediaGallery from "../../components/DesignMediaGallery";
@@ -45,6 +45,7 @@ export default function CustomerDashboardPage() {
 
   useEffect(() => {
     if (!user?.profileId) return;
+    let cancelled = false;
     (async () => {
       const [{ data: od }, catRes] = await Promise.all([
         supabase
@@ -53,12 +54,22 @@ export default function CustomerDashboardPage() {
           .eq("customer_id", user.profileId)
           .order("created_at", { ascending: false })
           .limit(25),
-        getCatalogDesigns().catch(() => ({ data: [] })),
+        getCatalogDesignsCached().catch(() => ({ data: [] })),
       ]);
-      setOrders(od || []);
-      setCatalog(catRes?.data || []);
-      setLoadOrders(false);
+      if (!cancelled) {
+        setOrders(od || []);
+        setCatalog(catRes?.data || []);
+        setLoadOrders(false);
+      }
+      // Warm refresh without blocking first paint.
+      const freshCat = await getCatalogDesignsCached({ forceRefresh: true }).catch(() => ({ data: [] }));
+      if (!cancelled) {
+        setCatalog(freshCat?.data || []);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.profileId]);
 
   function paymentLabel(o: { payment_status?: string; locked_price?: number | null }) {

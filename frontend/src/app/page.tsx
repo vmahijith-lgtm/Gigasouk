@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../lib/auth-context";
-import { getCatalogDesigns } from "../lib/api";
+import { getCatalogDesignsCached } from "../lib/api";
 import type { DeliveryAddress } from "../components/MapComponents";
 import DesignMediaGallery from "../components/DesignMediaGallery";
 import BrandLogo from "../components/BrandLogo";
@@ -71,16 +71,29 @@ export default function HomePage() {
 
   /* Catalog: live OR at least one committed factory (backend rules) */
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
-        const { data } = await getCatalogDesigns();
-        setDesigns((data as Design[]) || []);
+        const { data: cached } = await getCatalogDesignsCached();
+        if (!cancelled) {
+          setDesigns((cached as Design[]) || []);
+          setFetching(false);
+        }
+        // Background refresh keeps cache fresh without blocking paint.
+        const { data: fresh } = await getCatalogDesignsCached({ forceRefresh: true });
+        if (!cancelled) {
+          setDesigns((fresh as Design[]) || []);
+        }
       } catch {
-        setDesigns([]);
-      } finally {
-        setFetching(false);
+        if (!cancelled) {
+          setDesigns([]);
+          setFetching(false);
+        }
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const cats = ["all", ...Array.from(new Set(designs.map(d=>d.category||"").filter(Boolean)))];
@@ -230,26 +243,6 @@ export default function HomePage() {
             <NavBtn href="/auth/signup" label="Become a Designer →" ghost />
           </div>
 
-        </div>
-      </section>
-
-      {/* ── Stats ───────────────────────────────────────────────── */}
-      <section style={{padding:`0 ${padX} 64px`}}>
-        <div style={{maxWidth:900,margin:"0 auto",display:"grid",
-          gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}}>
-          {[
-            {val:"500+",label:"Partner Factories",color:T.green},
-            {val:"±0.5mm",label:"AI QC Tolerance",color:T.t2},
-            {val:"48h",label:"Max Route Time",color:T.t2},
-            {val:"100%",label:"Escrow Protected",color:T.t2},
-          ].map(s=>(
-            <div key={s.label} className="card-hover"
-              style={{background:T.card,border:`1px solid ${T.border}`,
-                borderRadius:14,padding:"24px 20px",textAlign:"center"}}>
-              <p style={{fontSize:32,fontWeight:900,color:s.color,marginBottom:4}}>{s.val}</p>
-              <p style={{fontSize:12,color:T.t3}}>{s.label}</p>
-            </div>
-          ))}
         </div>
       </section>
 
