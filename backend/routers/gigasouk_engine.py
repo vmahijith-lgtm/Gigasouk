@@ -27,6 +27,7 @@ from services.notify_service import (
     notify_customer_order_confirmed,
     notify_designer_order_placed,
 )
+from services.activity_audit import audit_user_activity
 from routers.auth_router import verify_jwt
 
 router = APIRouter()
@@ -352,6 +353,15 @@ async def place_order(
         "created_at":       datetime.now(timezone.utc).isoformat(),
     }
     db_admin.table("orders").insert(order_data).execute()
+    audit_user_activity(
+        action="order_place",
+        actor_profile_id=customer_id,
+        actor_role=profile.get("role"),
+        entity="order",
+        entity_id=order_id,
+        status="created",
+        metadata={"design_id": req.design_id, "commitment_id": best["id"], "quantity": req.quantity},
+    )
 
     # ── Negotiation room: reuse pre-commit chat if present, else create ──
     expires = datetime.now(timezone.utc) + timedelta(hours=NEGOTIATION_TIMEOUT_HOURS)

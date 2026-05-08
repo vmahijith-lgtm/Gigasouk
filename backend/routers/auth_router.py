@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Header, Query
 from fastapi.responses import JSONResponse
 
 from db import db_admin, get_one
+from services.activity_audit import audit_user_activity
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -166,6 +167,15 @@ def create_profile(
         existing_role = existing.get("role")
         if existing_role == "admin" or existing_role == req.role:
             logger.info(f"Profile already exists for auth_id={auth_uid}")
+            audit_user_activity(
+                action="profile_create_or_update",
+                actor_profile_id=existing["id"],
+                actor_role=existing_role,
+                entity="profile",
+                entity_id=existing["id"],
+                status="already_exists",
+                metadata={"requested_role": req.role},
+            )
             return {
                 "profile_id": existing["id"],
                 "role": existing_role,
@@ -246,6 +256,15 @@ def create_profile(
                     logger.error(f"Failed to create manufacturers row for profile {profile_id}: {e}")
                     raise HTTPException(500, f"Manufacturer profile creation failed: {str(e)}")
 
+        audit_user_activity(
+            action="profile_create_or_update",
+            actor_profile_id=profile_id,
+            actor_role=req.role,
+            entity="profile",
+            entity_id=profile_id,
+            status="role_updated",
+            metadata={"auth_id": auth_uid, "requested_role": req.role},
+        )
         return {
             "profile_id": profile_id,
             "role": req.role,
@@ -366,6 +385,15 @@ def create_profile(
                     logger.error(f"Failed to create manufacturers row for profile {profile_id}: {e}")
                     raise HTTPException(500, f"Manufacturer profile creation failed: {str(e)}")
 
+        audit_user_activity(
+            action="profile_create_or_update",
+            actor_profile_id=profile_id,
+            actor_role=req.role,
+            entity="profile",
+            entity_id=profile_id,
+            status="merged_existing",
+            metadata={"auth_id": auth_uid, "requested_role": req.role},
+        )
         return {
             "profile_id": profile_id,
             "role": req.role,
@@ -453,6 +481,15 @@ def create_profile(
             raise HTTPException(500, f"Manufacturer profile creation failed: {str(e)}")
     
     # 7. Return success
+    audit_user_activity(
+        action="profile_create_or_update",
+        actor_profile_id=profile_id,
+        actor_role=req.role,
+        entity="profile",
+        entity_id=profile_id,
+        status="created",
+        metadata={"auth_id": auth_uid},
+    )
     return JSONResponse(status_code=201, content={
         "profile_id": profile_id,
         "role": req.role,

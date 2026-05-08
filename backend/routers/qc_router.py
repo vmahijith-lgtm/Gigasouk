@@ -23,6 +23,7 @@ from services.notify_service import (
     notify_admin_qc_failed,
     notify_customer_shipped,
 )
+from services.activity_audit import audit_user_activity
 
 router = APIRouter()
 
@@ -110,6 +111,15 @@ async def submit_qc(
         "manufacturer_notes": req.notes,
         "reviewed_at":     datetime.now(timezone.utc).isoformat(),
     }).execute()
+    audit_user_activity(
+        action="qc_submit",
+        actor_profile_id=profile["id"],
+        actor_role=profile.get("role"),
+        entity="qc_record",
+        entity_id=qc_id,
+        status="created",
+        metadata={"order_id": req.order_id, "photo_count": len(req.photo_urls), "ai_passed": bool(qc_result["passed"])},
+    )
 
     if qc_result["passed"]:
         # QC PASS — trigger shipping

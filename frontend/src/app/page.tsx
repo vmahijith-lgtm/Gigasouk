@@ -187,10 +187,8 @@ export default function HomePage() {
         background:T.bg+"dd",borderBottom:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",
         rowGap:12,padding:`14px ${padX}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <BrandLogo width={128} height={32} />
-          <span style={{fontSize:11,color:T.t3,padding:"3px 10px",border:`1px solid ${T.border}`,
-            borderRadius:20,letterSpacing:".06em"}}>BETA</span>
+        <div style={{display:"flex",alignItems:"center"}}>
+          <BrandLogo width={106} height={26} />
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",minHeight:36}}>
           {loading ? (
@@ -359,7 +357,7 @@ export default function HomePage() {
       <footer style={{padding:`24px ${padX}`,borderTop:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <BrandLogo width={100} height={25} />
+          <BrandLogo width={92} height={23} />
           <p style={{fontSize:12,color:T.t3,marginTop:2}}>
             © 2026 · Cloud Factory Infrastructure for India
           </p>

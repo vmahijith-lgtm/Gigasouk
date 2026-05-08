@@ -27,6 +27,7 @@ from config import (
     ORDER_STATUS_CUTTING,
 )
 from services.notify_service import notify_payment_received, notify_escrow_released
+from services.activity_audit import audit_user_activity
 from routers.auth_router import verify_jwt
 
 router = APIRouter()
@@ -364,6 +365,15 @@ async def verify_payment(
 
     row = updated_rows[0]
     await notify_payment_received(row["manufacturer_id"], row["order_ref"])
+    audit_user_activity(
+        action="payment_verify",
+        actor_profile_id=profile["id"],
+        actor_role=profile.get("role"),
+        entity="order",
+        entity_id=req.order_id,
+        status="in_escrow",
+        metadata={"razorpay_order_id": req.razorpay_order_id, "razorpay_payment_id": req.razorpay_payment_id},
+    )
 
     return {"verified": True, "status": "in_escrow", "message": "Payment received. Manufacturing can begin."}
 

@@ -33,6 +33,7 @@ from services.notify_service import (
     notify_manufacturer_regional_variant_needed,
 )
 from services.commitment_negotiation_room import ensure_negotiation_room_for_active_commitment
+from services.activity_audit import audit_user_activity
 
 router = APIRouter()
 
@@ -167,7 +168,11 @@ async def seek_commitments(
 # ════════════════════════════════════════════════════════════════
 
 @router.post("/commitments")
-async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
+async def create_commitment(
+    req: CommitRequest,
+    bg: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+):
     """
     Manufacturer opts in to fulfill a design at a specific price.
     If committed_price matches base_price: instant approval.
@@ -175,6 +180,17 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
     Once MIN_COMMITS_TO_GO_LIVE commits exist: design advances to COMMITTED.
     Once design is COMMITTED it can be set LIVE.
     """
+
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile.get("role") != "manufacturer":
+        raise HTTPException(403, "Manufacturers only")
+    mfr_row = get_one("manufacturers", {"profile_id": profile["id"]})
+    if not mfr_row:
+        raise HTTPException(404, "Manufacturer profile not found")
+
+    if req.manufacturer_id != mfr_row["id"]:
+        raise HTTPException(403, "manufacturer_id does not match authenticated user")
 
     design = get_one("designs", {"id": req.design_id})
     if not design:
@@ -193,10 +209,6 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
     )
     if existing:
         raise HTTPException(409, "You have already committed to this design")
-
-    mfr_row = get_one("manufacturers", {"id": req.manufacturer_id})
-    if not mfr_row:
-        raise HTTPException(404, "Manufacturer not found")
 
     city = (req.region_city or "").strip() or (mfr_row.get("city") or "").strip()
     state = (req.region_state or "").strip() or (mfr_row.get("state") or "").strip()
@@ -234,6 +246,15 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
 
     if not needs_approval:
         ensure_negotiation_room_for_active_commitment(commitment_id)
+        audit_user_activity(
+            action="commitment_create",
+            actor_profile_id=profile["id"],
+            actor_role=profile.get("role"),
+            entity="manufacturer_commitment",
+            entity_id=commitment_id,
+            status="active",
+            metadata={"design_id": req.design_id, "price": req.committed_price},
+        )
 
     # If regional variant: create variant request for designer
     if needs_approval:
@@ -258,6 +279,15 @@ async def create_commitment(req: CommitRequest, bg: BackgroundTasks):
             city,
             req.committed_price,
             variant_id,
+        )
+        audit_user_activity(
+            action="commitment_create",
+            actor_profile_id=profile["id"],
+            actor_role=profile.get("role"),
+            entity="manufacturer_commitment",
+            entity_id=commitment_id,
+            status="pending_approval",
+            metadata={"design_id": req.design_id, "price": req.committed_price, "variant_id": variant_id},
         )
 
         return {
@@ -349,13 +379,26 @@ async def review_variant(
 # ════════════════════════════════════════════════════════════════
 
 @router.get("/commitments/available")
-def get_available_designs(manufacturer_id: str):
+def get_available_designs(
+    manufacturer_id: str,
+    authorization: Optional[str] = Header(None),
+):
     """
     Manufacturer's jobs board.
     Returns all designs in SEEKING state that match this
     manufacturer's machine capabilities and have not yet been
     committed to by this manufacturer.
     """
+
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile.get("role") != "manufacturer":
+        raise HTTPException(403, "Manufacturers only")
+    mfr_row = get_one("manufacturers", {"profile_id": profile["id"]})
+    if not mfr_row:
+        raise HTTPException(404, "Manufacturer profile not found")
+    if manufacturer_id != mfr_row["id"]:
+        raise HTTPException(403, "manufacturer_id does not match authenticated user")
 
     manufacturer = get_one("manufacturers", {"id": manufacturer_id})
     if not manufacturer:

@@ -7,8 +7,8 @@ type BrandLogoProps = {
 };
 
 export default function BrandLogo({
-  width = 126,
-  height = 32,
+  width = 106,
+  height = 26,
   alt = "GigaSouk",
 }: BrandLogoProps) {
   return (
@@ -18,7 +18,7 @@ export default function BrandLogo({
       width={width}
       height={height}
       priority
-      style={{ height: "auto", width: "auto", maxWidth: "100%" }}
+      style={{ height: "auto", width: "auto", maxWidth: "100%", background: "transparent", display: "block" }}
     />
   );
 }
