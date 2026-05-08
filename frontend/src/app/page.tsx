@@ -188,7 +188,7 @@ export default function HomePage() {
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",
         rowGap:12,padding:`14px ${padX}`}}>
         <div style={{display:"flex",alignItems:"center"}}>
-          <BrandLogo width={106} height={26} />
+          <BrandLogo width={82} height={20} />
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",minHeight:36}}>
           {loading ? (
@@ -340,14 +340,31 @@ export default function HomePage() {
           </h2>
           <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap"}}>
             <a href="/auth/signup?role=designer"
-              style={{padding:"13px 28px",borderRadius:10,background:T.green,
-                color:T.bg,fontWeight:800,fontSize:14,textDecoration:"none"}}>
-              Start as Designer ✏️
+              style={{
+                padding:"13px 28px",
+                borderRadius:10,
+                background:T.green,
+                color:T.bg,
+                fontWeight:800,
+                fontSize:14,
+                textDecoration:"none",
+                border:"1px solid transparent",
+                boxShadow:"0 8px 20px #00E5A033",
+              }}>
+              Start as Designer
             </a>
             <a href="/auth/signup?role=manufacturer"
-              style={{padding:"13px 28px",borderRadius:10,border:`1px solid ${T.border}`,
-                color:T.t2,fontWeight:700,fontSize:14,textDecoration:"none",background:T.card}}>
-              Register Factory 🏭
+              style={{
+                padding:"13px 28px",
+                borderRadius:10,
+                border:`1px solid ${T.green}66`,
+                color:T.green,
+                fontWeight:700,
+                fontSize:14,
+                textDecoration:"none",
+                background:T.card,
+              }}>
+              Register Factory
             </a>
           </div>
         </div>
@@ -357,7 +374,7 @@ export default function HomePage() {
       <footer style={{padding:`24px ${padX}`,borderTop:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <BrandLogo width={92} height={23} />
+          <BrandLogo width={74} height={18} />
           <p style={{fontSize:12,color:T.t3,marginTop:2}}>
             © 2026 · Cloud Factory Infrastructure for India
           </p>
