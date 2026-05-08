@@ -220,11 +220,6 @@ export default function HomePage() {
             Products made by factories{" "}
             <span style={{color:T.green,position:"relative"}}>near you</span>
           </h1>
-          <p style={{fontSize:16,color:T.t2,maxWidth:500,margin:"0 auto 30px",lineHeight:1.6}}>
-            Pick your factory on the map. AI scores the nearest options.
-            Quality checked by computer vision. Money released only on delivery.
-          </p>
-
           <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap",marginBottom:48}}>
             <button className="btn-green"
               onClick={() => catalogRef.current?.scrollIntoView({behavior:"smooth"})}
@@ -235,9 +230,6 @@ export default function HomePage() {
             <NavBtn href="/auth/signup" label="Become a Designer →" ghost />
           </div>
 
-          <p style={{fontSize:12,color:T.t3,maxWidth:620,margin:"0 auto"}}>
-            500+ partner factories · map-based routing · AI quality checks · escrow-safe payments
-          </p>
         </div>
       </section>
 
@@ -258,36 +250,6 @@ export default function HomePage() {
               <p style={{fontSize:12,color:T.t3}}>{s.label}</p>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* ── How It Works ────────────────────────────────────────── */}
-      <section style={{padding:`0 ${padX} 80px`}}>
-        <div style={{maxWidth:900,margin:"0 auto"}}>
-          <p style={{fontSize:11,fontWeight:700,color:T.green,letterSpacing:".12em",
-            textTransform:"uppercase",textAlign:"center",marginBottom:10}}>The Platform</p>
-          <h2 style={{fontSize:30,fontWeight:800,textAlign:"center",marginBottom:48,
-            letterSpacing:"-0.5px"}}>How GigaSouk works</h2>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16}}>
-            {[
-              {n:"01",icon:"✏️",title:"Designer uploads",body:"A designer uploads a CAD file and sets a royalty price."},
-              {n:"02",icon:"🏭",title:"Factories commit",body:"Nearby MSME factories commit to manufacture it. The designer then publishes when it goes on sale."},
-              {n:"03",icon:"🗺️",title:"Pick your factory",body:"After the designer publishes, enter your pincode and choose a factory on the map."},
-              {n:"04",icon:"🤖",title:"AI quality check",body:"Factory uploads 5 photos. OpenCV verifies dimensions to ±0.5mm."},
-              {n:"05",icon:"🚚",title:"Ships to you",body:"Pass QC → auto-ship via Shiprocket. Track in real-time."},
-              {n:"06",icon:"🔒",title:"Escrow releases",body:"On delivery, Razorpay splits fees to designer, factory & platform."},
-            ].map(s=>(
-              <div key={s.n} className="card-hover"
-                style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:24}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                  <span style={{fontSize:10,fontWeight:800,color:T.green,opacity:.6}}>{s.n}</span>
-                  <span style={{fontSize:22}}>{s.icon}</span>
-                </div>
-                <p style={{fontSize:14,fontWeight:700,color:T.t1,marginBottom:6}}>{s.title}</p>
-                <p style={{fontSize:13,color:T.t3,lineHeight:1.6}}>{s.body}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -385,9 +347,6 @@ export default function HomePage() {
           <h2 style={{fontSize:32,fontWeight:900,marginBottom:16,letterSpacing:"-0.5px"}}>
             Are you a designer or factory owner?
           </h2>
-          <p style={{fontSize:16,color:T.t2,maxWidth:480,margin:"0 auto 32px"}}>
-            Designers earn royalties on every sale. Manufacturers get a steady stream of AI-routed jobs.
-          </p>
           <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap"}}>
             <a href="/auth/signup?role=designer"
               style={{padding:"13px 28px",borderRadius:10,background:T.green,
