@@ -52,6 +52,15 @@ const PIN_ICONS: Record<string, string> = {
   yellow: "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
 };
 
+/** Manufacturer order map pin colours by workflow status */
+const MANUFACTURER_ORDER_STATUS_PIN: Record<string, string> = {
+  confirmed: "blue",
+  cutting: "yellow",
+  qc_review: "yellow",
+  shipped: "green",
+  delivered: "green",
+};
+
 function hasGoogleMaps(): boolean {
   return typeof window !== "undefined" && !!(window as any).google?.maps;
 }
@@ -387,14 +396,6 @@ export function ManufacturerOrderMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const ready = useMapsReady();
 
-  const STATUS_PIN: Record<string, string> = {
-    confirmed:   "blue",
-    cutting:     "yellow",
-    qc_review:   "yellow",
-    shipped:     "green",
-    delivered:   "green",
-  };
-
   useEffect(() => {
     const G = (window as any).google;
     if (!G || !mapRef.current) return;
@@ -432,7 +433,7 @@ export function ManufacturerOrderMap({
     orders.forEach(order => {
       const addr = order.delivery_address;
       if (!addr?.lat || !addr?.lng) return;
-      const pin  = STATUS_PIN[order.status] || "blue";
+      const pin  = MANUFACTURER_ORDER_STATUS_PIN[order.status] || "blue";
       const marker = new M.Marker({
         position: { lat: addr.lat, lng: addr.lng },
         map,

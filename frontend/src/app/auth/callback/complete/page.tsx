@@ -134,7 +134,7 @@ function CompleteContent() {
         return () => {
             if (redirectTimer) clearTimeout(redirectTimer);
         };
-    }, [router, next]);
+    }, [router, next, roleParam]);
 
     return (
         <div

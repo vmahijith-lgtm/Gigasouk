@@ -6,6 +6,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import BrandLogo from "../../../components/BrandLogo";
@@ -211,17 +212,17 @@ function LoginForm() {
         {/* Footer links */}
         <div style={{ marginTop: 24, textAlign: "center" }}>
           <p style={{ fontSize: 13, color: C.t3 }}>
-            Don't have an account?{" "}
-            <a href="/auth/signup" style={{ color: C.green, textDecoration: "none", fontWeight: 600 }}>
+            {`Don't have an account?`}{" "}
+            <Link href="/auth/signup" style={{ color: C.green, textDecoration: "none", fontWeight: 600 }}>
               Sign up
-            </a>
+            </Link>
           </p>
-          <a href="/" style={{
+          <Link href="/" style={{
             display: "block", marginTop: 12, fontSize: 12, color: C.t3,
             textDecoration: "none"
           }}>
             ← Back to shop
-          </a>
+          </Link>
         </div>
       </div>
     </div>

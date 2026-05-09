@@ -7,6 +7,12 @@ const nextConfig = {
   // Root Directory = "frontend" — it breaks output paths (ENOENT routes-manifest.json,
   // doubled paths like path1/path1/.next/…).
 
+  // ESLint 9 flat config (`eslint.config.mjs`) — run `npm run lint` in CI; Next's built-in
+  // build-time ESLint still expects legacy options and errors otherwise.
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   images: {
     domains: [
       "gigasouk.com",

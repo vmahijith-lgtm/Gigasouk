@@ -82,6 +82,14 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
         setTxns(txnPack || []);
         setWallet(me.wallet_balance || 0);
         setFinance(finRes || null);
+      } catch (e) {
+        console.warn("[GigaSoukDesignerDashboard] load failed", e);
+        setProfile({});
+        setStats({});
+        setOrders([]);
+        setTxns([]);
+        setWallet(0);
+        setFinance(null);
       } finally {
         setLoading(false);
       }

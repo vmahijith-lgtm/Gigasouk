@@ -206,6 +206,17 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         setFinance(finRes || null);
         setCommitments(Array.isArray(commList) ? commList : []);
         setPayouts(payoutRows);
+      } catch (e) {
+        console.warn("[GigaSoukManufacturerDashboard] load failed", e);
+        setMfr({});
+        setProfile({});
+        setMachinesDraft([]);
+        setMaterialsDraft([]);
+        setJobs([]);
+        setEarningsOrders([]);
+        setFinance(null);
+        setCommitments([]);
+        setPayouts([]);
       } finally {
         setLoading(false);
       }

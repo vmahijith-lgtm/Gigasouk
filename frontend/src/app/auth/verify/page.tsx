@@ -60,7 +60,7 @@ export default function VerifyPage() {
           borderTop: `1px solid ${C.border}`
         }}>
           <p style={{ fontSize: 12, color: C.t3, marginBottom: 16 }}>
-            Didn't receive the email? Check spam, or resend it below.
+            {`Didn't receive the email? Check spam, or resend it below.`}
           </p>
 
           {resent ? (

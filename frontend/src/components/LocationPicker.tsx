@@ -75,31 +75,7 @@ export default function LocationPicker({ mode, currentCity, currentState, hasLoc
     return () => clearInterval(t);
   }, [mapsReady]);
 
-  // ── GPS path ─────────────────────────────────────────────────
-  const requestGPS = useCallback(() => {
-    setStep("requesting");
-    setError("");
-    if (!navigator.geolocation) {
-      setError("Your browser doesn't support location access. Use address search instead.");
-      setStep("idle");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      pos => reverseGeocode(pos.coords.latitude, pos.coords.longitude),
-      err => {
-        const msgs: Record<number, string> = {
-          1: "Location permission denied. Please use address search instead.",
-          2: "Location unavailable. Use address search.",
-          3: "Location request timed out. Use address search.",
-        };
-        setError(msgs[err.code] || "Could not get location.");
-        setStep("idle");
-      },
-      { timeout: 10000, maximumAge: 300000, enableHighAccuracy: false }
-    );
-  }, []);
-
-  // ── Reverse geocode lat/lng → address fields ──────────────────
+  // ── Reverse geocode lat/lng → address fields (before GPS callback uses it) ──
   const reverseGeocode = useCallback((lat: number, lng: number) => {
     const G = (window as any).google;
     if (!G) { setError("Maps not loaded yet. Try again in a moment."); setStep("idle"); return; }
@@ -129,6 +105,30 @@ export default function LocationPicker({ mode, currentCity, currentState, hasLoc
       }
     );
   }, [mode]);
+
+  // ── GPS path ─────────────────────────────────────────────────
+  const requestGPS = useCallback(() => {
+    setStep("requesting");
+    setError("");
+    if (!navigator.geolocation) {
+      setError("Your browser doesn't support location access. Use address search instead.");
+      setStep("idle");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => reverseGeocode(pos.coords.latitude, pos.coords.longitude),
+      err => {
+        const msgs: Record<number, string> = {
+          1: "Location permission denied. Please use address search instead.",
+          2: "Location unavailable. Use address search.",
+          3: "Location request timed out. Use address search.",
+        };
+        setError(msgs[err.code] || "Could not get location.");
+        setStep("idle");
+      },
+      { timeout: 10000, maximumAge: 300000, enableHighAccuracy: false }
+    );
+  }, [reverseGeocode]);
 
   // ── Search path (Places Autocomplete) ────────────────────────
   useEffect(() => {

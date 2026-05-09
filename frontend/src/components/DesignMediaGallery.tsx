@@ -177,6 +177,19 @@ export default function DesignMediaGallery({
     [orderedImages]
   );
 
+  const moveSlide = useCallback(
+    (delta: number) => {
+      if (!orderedImages.length) return;
+      setActiveIndex((i) => {
+        const next = i + delta;
+        if (next < 0) return 0;
+        if (next >= orderedImages.length) return orderedImages.length - 1;
+        return next;
+      });
+    },
+    [orderedImages.length]
+  );
+
   useEffect(() => {
     if (lightboxIndex === null) return;
     if (orderedImages.length === 0) setLightboxIndex(null);
@@ -427,19 +440,6 @@ export default function DesignMediaGallery({
   const lightboxTotal = orderedImages.length;
   const activeImg = orderedImages[activeIndex] ?? null;
   const canSlide = lightboxTotal > 1;
-
-  const moveSlide = useCallback(
-    (delta: number) => {
-      if (!orderedImages.length) return;
-      setActiveIndex((i) => {
-        const next = i + delta;
-        if (next < 0) return 0;
-        if (next >= orderedImages.length) return orderedImages.length - 1;
-        return next;
-      });
-    },
-    [orderedImages.length]
-  );
 
   const inner = (
     <div style={{ marginBottom: panel ? 0 : 20 }}>

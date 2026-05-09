@@ -203,7 +203,7 @@ export default function ResetPasswordPage() {
                   suppressHydrationWarning
                 />
                 {confirm && confirm !== password && (
-                  <p style={{ fontSize: 11, color: C.red, marginTop: 4 }}>Passwords don't match</p>
+                  <p style={{ fontSize: 11, color: C.red, marginTop: 4 }}>{`Passwords don't match`}</p>
                 )}
               </div>
 

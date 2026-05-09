@@ -5,6 +5,7 @@
 // ════════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams }           from "next/navigation";
 import { supabase }            from "../../../lib/supabase";
 import { BACKEND_URL }         from "../../../lib/api";
@@ -98,9 +99,9 @@ export default function TrackOrderPage() {
         <p style={{ color:C.red, fontSize:16, fontWeight:600, marginBottom:8 }}>
           {error || "Order not found"}
         </p>
-        <a href="/" style={{ color:C.green, fontSize:13, textDecoration:"none" }}>
+        <Link href="/" style={{ color:C.green, fontSize:13, textDecoration:"none" }}>
           ← Back to GigaSouk
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -127,10 +128,10 @@ export default function TrackOrderPage() {
 
         {/* ── Header ───────────────────────────────────────────── */}
         <div style={{ marginBottom:28 }}>
-          <a href="/" style={{ color:C.t3, fontSize:13, textDecoration:"none",
+          <Link href="/" style={{ color:C.t3, fontSize:13, textDecoration:"none",
             display:"inline-flex", alignItems:"center", gap:6 }}>
             ← GigaSouk
-          </a>
+          </Link>
           <div style={{ display:"flex", alignItems:"flex-start",
             justifyContent:"space-between", flexWrap:"wrap", gap:12, marginTop:14 }}>
             <div>
