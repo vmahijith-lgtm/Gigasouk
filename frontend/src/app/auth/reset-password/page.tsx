@@ -95,7 +95,7 @@ export default function ResetPasswordPage() {
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 24, display: "flex", justifyContent: "center" }}>
-          <BrandLogo width={136} height={34} />
+          <BrandLogo />
         </div>
 
         {done ? (

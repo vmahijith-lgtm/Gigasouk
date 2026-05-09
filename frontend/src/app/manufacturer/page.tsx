@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
 import GigaSoukManufacturerDashboard from "../../components/GigaSoukManufacturerDashboard";
+import BrandLogo from "../../components/BrandLogo";
 
 const C = { bg: "#060810", t3: "#5A6A80", border: "#1A2230" };
 
@@ -66,9 +67,7 @@ function Loading() {
       alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16
     }}>
       <style>{`@keyframes gs-pulse{0%,100%{opacity:.3}50%{opacity:1}}`}</style>
-      <div style={{ fontSize: 26, fontWeight: 900, fontFamily: "Inter,sans-serif" }}>
-        GIGA<span style={{ color: "#00E5A0" }}>SOUK</span>
-      </div>
+      <BrandLogo />
       <div style={{
         width: 32, height: 3, borderRadius: 2, background: "#00E5A0",
         animation: "gs-pulse 1.2s ease infinite"

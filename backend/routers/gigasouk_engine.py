@@ -32,6 +32,13 @@ from routers.auth_router import verify_jwt
 
 router = APIRouter()
 
+# Distance-aware shipping parameters (INR)
+LOCAL_SHIP_BASE_FEE_INR = 45.0
+LOCAL_SHIP_PER_KM_NEAR_INR = 4.0      # first 25km
+LOCAL_SHIP_PER_KM_MID_INR = 5.5       # 25km-100km
+LOCAL_SHIP_PER_KM_FAR_INR = 7.0       # beyond 100km
+LOCAL_SHIP_HANDLING_PER_EXTRA_UNIT_INR = 20.0
+
 
 # ════════════════════════════════════════════════════════════════
 # MODELS
@@ -120,6 +127,28 @@ def score_factory(distance_km: float, rating: float, queue_depth: int) -> float:
     )
 
 
+def localized_shipping_cost(distance_km: float, quantity: int = 1) -> float:
+    """
+    Distance-based shipping with quantity adjustment.
+    This gives a transparent localized shipping component at checkout.
+    """
+    d = max(0.0, float(distance_km))
+    q = max(1, int(quantity or 1))
+
+    near_km = min(d, 25.0)
+    mid_km = min(max(d - 25.0, 0.0), 75.0)
+    far_km = max(d - 100.0, 0.0)
+
+    distance_component = (
+        (near_km * LOCAL_SHIP_PER_KM_NEAR_INR) +
+        (mid_km * LOCAL_SHIP_PER_KM_MID_INR) +
+        (far_km * LOCAL_SHIP_PER_KM_FAR_INR)
+    )
+    quantity_component = (q - 1) * LOCAL_SHIP_HANDLING_PER_EXTRA_UNIT_INR
+
+    return round(LOCAL_SHIP_BASE_FEE_INR + distance_component + quantity_component, 2)
+
+
 def get_committed_pool(design_id: str, customer_lat: float, customer_lng: float) -> list[dict]:
     """
     Fetch all active manufacturer commitments for a design.
@@ -147,8 +176,8 @@ def get_committed_pool(design_id: str, customer_lat: float, customer_lng: float)
         c["score"] = score_factory(dist, mfr.get("rating", 3.0), mfr.get("queue_depth", 0))
         scored.append(c)
 
-    # Shortest distance first; composite score breaks ties only.
-    return sorted(scored, key=lambda x: (x["distance_km"], x["score"]))
+    # Composite score first (60/30/10), distance breaks ties.
+    return sorted(scored, key=lambda x: (x["score"], x["distance_km"]))
 
 
 # ════════════════════════════════════════════════════════════════
@@ -206,6 +235,8 @@ async def available_factories(
             "rating":          mfr.get("rating", 0),
             "queue_depth":     mfr.get("queue_depth", 0),
             "committed_price": c.get("committed_price", 0),
+            "estimated_shipping_cost": localized_shipping_cost(c["distance_km"], 1),
+            "estimated_total_price": round(float(c.get("committed_price", 0) or 0) + localized_shipping_cost(c["distance_km"], 1), 2),
             "score":           c["score"],
             # City centroid — NOT exact factory GPS
             "city_lat":        city_lat,
@@ -333,7 +364,9 @@ async def place_order(
     # Lock checkout price at the chosen factory commitment so Razorpay can run
     # immediately after place_order (homepage / product checkout). Designer ↔ mfr
     # can still counter in the room via bids + accept_bid to change locked_price.
-    committed = best["committed_price"]
+    committed = round(float(best.get("committed_price", 0) or 0), 2)
+    shipping_cost = localized_shipping_cost(best["distance_km"], req.quantity)
+    final_total = round(committed + shipping_cost, 2)
     order_data = {
         "id":               order_id,
         "order_ref":        order_ref,
@@ -344,7 +377,9 @@ async def place_order(
         "quantity":         req.quantity,
         "delivery_address": req.delivery_address,
         "committed_price":  committed,
-        "locked_price":     committed,
+        "locked_price":     final_total,
+        "shipping_cost":    shipping_cost,
+        "total_amount":     final_total,
         "distance_km":      best["distance_km"],
         "status":           ORDER_STATUS_CONFIRMED,
         "payment_status":   "pending",
@@ -413,8 +448,12 @@ async def place_order(
         "room_id":      room_id,
         "manufacturer": manufacturer_id,
         "distance_km":  best["distance_km"],
+        "routing_score": round(float(best["score"]), 4),
         "status":       ORDER_STATUS_CONFIRMED,
-        "locked_price": committed,
+        "base_price":   committed,
+        "shipping_cost": shipping_cost,
+        "total_amount": final_total,
+        "locked_price": final_total,
     }
 
 

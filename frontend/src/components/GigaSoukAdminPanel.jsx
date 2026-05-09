@@ -156,7 +156,7 @@ export default function GigaSoukAdminPanel({ adminId, onSignOut }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <BrandLogo width={112} height={28} />
+          <BrandLogo />
           <span style={{ fontSize: 11, color: C.red, marginLeft: 10, fontWeight: 700 }}>ADMIN</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

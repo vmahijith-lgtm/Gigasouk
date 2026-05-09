@@ -9,6 +9,7 @@ import { useParams }           from "next/navigation";
 import { supabase }            from "../../../lib/supabase";
 import { BACKEND_URL }         from "../../../lib/api";
 import { TrackingMap }         from "../../../components/MapComponents";
+import BrandLogo               from "../../../components/BrandLogo";
 
 const C = {
   bg:"#060810", card:"#0C1018", card2:"#111826", border:"#1A2230",
@@ -78,8 +79,8 @@ export default function TrackOrderPage() {
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex",
       alignItems:"center", justifyContent:"center", fontFamily:"Inter,sans-serif" }}>
       <div style={{ textAlign:"center" }}>
-        <div style={{ fontSize:28, fontWeight:900, marginBottom:16 }}>
-          GIGA<span style={{ color:C.green }}>SOUK</span>
+        <div style={{ display:"flex", justifyContent:"center", marginBottom:16 }}>
+          <BrandLogo />
         </div>
         <div style={{ width:32, height:3, borderRadius:2, background:C.green,
           margin:"0 auto", animation:"pulse 1.2s ease infinite" }}/>

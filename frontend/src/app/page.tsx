@@ -188,7 +188,7 @@ export default function HomePage() {
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",
         rowGap:12,padding:`14px ${padX}`}}>
         <div style={{display:"flex",alignItems:"center"}}>
-          <BrandLogo width={52} height={52} />
+          <BrandLogo />
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center",minHeight:36}}>
           {loading ? (
@@ -386,7 +386,7 @@ export default function HomePage() {
       <footer style={{padding:`24px ${padX}`,borderTop:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <BrandLogo width={36} height={36} />
+          <BrandLogo />
           <p style={{fontSize:12,color:T.t3,marginTop:2}}>
             © 2026 · Cloud Factory Infrastructure for India
           </p>

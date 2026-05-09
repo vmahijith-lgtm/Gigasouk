@@ -57,6 +57,23 @@ export default function LocationPicker({ mode, currentCity, currentState, hasLoc
   const inputRef = useRef<HTMLInputElement>(null);
   const mapRef   = useRef<HTMLDivElement>(null);
   const markerRef= useRef<any>(null);
+  const [mapsReady, setMapsReady] = useState<boolean>(
+    typeof window !== "undefined" && !!(window as any).google?.maps
+  );
+
+  useEffect(() => {
+    if (mapsReady) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      if ((window as any).google?.maps) {
+        setMapsReady(true);
+        clearInterval(t);
+      } else if (++tries > 40) {
+        clearInterval(t);
+      }
+    }, 250);
+    return () => clearInterval(t);
+  }, [mapsReady]);
 
   // ── GPS path ─────────────────────────────────────────────────
   const requestGPS = useCallback(() => {
@@ -233,14 +250,21 @@ export default function LocationPicker({ mode, currentCity, currentState, hasLoc
         {(step === "idle" || step === "done") && (
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             <button onClick={() => { setMethod("gps"); requestGPS(); }}
+              disabled={!mapsReady}
               style={btnStyle(C.green)}>
               📡 Use my current location
               <span style={{ fontSize:10, opacity:0.7, marginLeft:8 }}>Browser GPS</span>
             </button>
             <button onClick={() => { setMethod("search"); setStep("picking"); }}
+              disabled={!mapsReady}
               style={btnStyle(C.blue)}>
               🔍 Search by {mode === "manufacturer" ? "city" : "address or pincode"}
             </button>
+            {!mapsReady && (
+              <p style={{ color: C.gold, fontSize: 11, textAlign: "center", margin: 0 }}>
+                Maps is not ready. Check `NEXT_PUBLIC_GOOGLE_MAPS_KEY` and reload.
+              </p>
+            )}
             {hasLocation && step === "idle" && (
               <p style={{ color:C.t3, fontSize:11, textAlign:"center", margin:0 }}>
                 Current: {currentCity}, {currentState} · Click above to update

@@ -12,7 +12,7 @@
 // Maps script is loaded once in layout.tsx.
 // ════════════════════════════════════════════════════════════════
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────
 export interface DeliveryAddress {
@@ -52,6 +52,29 @@ const PIN_ICONS: Record<string, string> = {
   yellow: "https://maps.google.com/mapfiles/ms/icons/yellow-dot.png",
 };
 
+function hasGoogleMaps(): boolean {
+  return typeof window !== "undefined" && !!(window as any).google?.maps;
+}
+
+function useMapsReady(): boolean {
+  const [ready, setReady] = useState<boolean>(hasGoogleMaps());
+  useEffect(() => {
+    if (ready) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      if (hasGoogleMaps()) {
+        setReady(true);
+        clearInterval(t);
+        return;
+      }
+      tries += 1;
+      if (tries >= 40) clearInterval(t);
+    }, 250);
+    return () => clearInterval(t);
+  }, [ready]);
+  return ready;
+}
+
 // ════════════════════════════════════════════════════════════════
 // 1. ADDRESS AUTOCOMPLETE
 //    Replace every address form with this. Returns full address + lat/lng.
@@ -65,6 +88,7 @@ export function AddressAutocomplete({
   placeholder?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const mapsReady = useMapsReady();
 
   useEffect(() => {
     let attempts = 0;
@@ -108,6 +132,7 @@ export function AddressAutocomplete({
       <input
         ref={inputRef}
         placeholder={placeholder}
+        disabled={!mapsReady}
         style={{
           width: "100%", padding: "12px 14px 12px 36px", boxSizing: "border-box",
           borderRadius: 8, background: "#111826", border: "1px solid #1A2230",
@@ -117,6 +142,11 @@ export function AddressAutocomplete({
         onFocus={e => (e.target.style.borderColor = "#00E5A0")}
         onBlur={e  => (e.target.style.borderColor = "#1A2230")}
       />
+      {!mapsReady && (
+        <p style={{ marginTop: 8, fontSize: 11, color: "#F5A623" }}>
+          Maps is not ready. Check `NEXT_PUBLIC_GOOGLE_MAPS_KEY` and reload.
+        </p>
+      )}
     </div>
   );
 }
@@ -137,6 +167,7 @@ export function OrderMap({
   factoryCity: string; distanceKm:  number;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
+  const ready = useMapsReady();
 
   useEffect(() => {
     const G = (window as any).google;
@@ -205,7 +236,17 @@ export function OrderMap({
         <span style={{ color: "#F4F6FC", fontSize: 13, fontWeight: 600 }}>🗺️ Your Factory</span>
         <span style={{ color: "#00E5A0", fontSize: 13 }}>🏭 {factoryCity} — {distanceKm}km</span>
       </div>
-      <div ref={mapRef} style={{ width: "100%", height: 280 }} />
+      {ready ? (
+        <div ref={mapRef} style={{ width: "100%", height: 280 }} />
+      ) : (
+        <div style={{
+          width: "100%", height: 280, background: "#0C1018",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#5A6A80", fontSize: 12, textAlign: "center", padding: 16,
+        }}>
+          Map unavailable. Verify `NEXT_PUBLIC_GOOGLE_MAPS_KEY`.
+        </div>
+      )}
     </div>
   );
 }
@@ -228,6 +269,7 @@ export function TrackingMap({
 }) {
   const mapRef  = useRef<HTMLDivElement>(null);
   const shipRef = useRef<any>(null);   // shipment marker
+  const ready = useMapsReady();
 
   const geocodeCity = useCallback(async (city: string, state: string) => {
     const G = (window as any).google;
@@ -303,7 +345,17 @@ export function TrackingMap({
           fontWeight: 600,
         }}>{status}</span>
       </div>
-      <div ref={mapRef} style={{ width: "100%", height: 300 }} />
+      {ready ? (
+        <div ref={mapRef} style={{ width: "100%", height: 300 }} />
+      ) : (
+        <div style={{
+          width: "100%", height: 300, background: "#0C1018",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#5A6A80", fontSize: 12, textAlign: "center", padding: 16,
+        }}>
+          Tracking map unavailable. Verify `NEXT_PUBLIC_GOOGLE_MAPS_KEY`.
+        </div>
+      )}
       <div style={{ background: "#111826", padding: "10px 14px", display: "flex", gap: 16, fontSize: 12, color: "#5A6A80" }}>
         <span>🟡 Package location</span>
         <span>🔵 Your address</span>
@@ -333,6 +385,7 @@ export function ManufacturerOrderMap({
   }>;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
+  const ready = useMapsReady();
 
   const STATUS_PIN: Record<string, string> = {
     confirmed:   "blue",
@@ -409,7 +462,17 @@ export function ManufacturerOrderMap({
         <span style={{ color: "#F4F6FC", fontSize: 13, fontWeight: 600 }}>🗺️ Your Active Orders</span>
         <span style={{ color: "#5A6A80", fontSize: 12 }}>{orders.length} order{orders.length !== 1 ? "s" : ""}</span>
       </div>
-      <div ref={mapRef} style={{ width: "100%", height: mapHeight, minHeight: 320 }} />
+      {ready ? (
+        <div ref={mapRef} style={{ width: "100%", height: mapHeight, minHeight: 320 }} />
+      ) : (
+        <div style={{
+          width: "100%", height: mapHeight, minHeight: 320, background: "#0C1018",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#5A6A80", fontSize: 12, textAlign: "center", padding: 16,
+        }}>
+          Order map unavailable. Verify `NEXT_PUBLIC_GOOGLE_MAPS_KEY`.
+        </div>
+      )}
       <div style={{
         background: "#111826", padding: "10px 14px",
         display: "flex", gap: 16, fontSize: 12, color: "#5A6A80",

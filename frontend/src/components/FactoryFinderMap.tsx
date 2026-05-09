@@ -74,10 +74,27 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
   const [selected,   setSelected]   = useState<FactoryOption | null>(null);
   const [error,      setError]      = useState("");
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [mapsReady, setMapsReady] = useState<boolean>(
+    typeof window !== "undefined" && !!(window as any).google?.maps
+  );
 
   /** Selected row for directions & summary (fallback to nearest). */
   const factoryForRoute =
     step === "results" && factories.length > 0 ? selected ?? factories[0] : null;
+
+  useEffect(() => {
+    if (mapsReady) return;
+    let tries = 0;
+    const t = setInterval(() => {
+      if ((window as any).google?.maps) {
+        setMapsReady(true);
+        clearInterval(t);
+      } else if (++tries > 40) {
+        clearInterval(t);
+      }
+    }, 250);
+    return () => clearInterval(t);
+  }, [mapsReady]);
 
   // ── Fetch available factories from backend ────────────────────
   const fetchFactories = useCallback(async (addr: DeliveryAddress) => {
@@ -188,15 +205,21 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
             />
           </div>
           <div style={{ textAlign:"center", margin:"14px 0", color:C.t3, fontSize:12 }}>or</div>
-          <button onClick={useGPS} disabled={gpsLoading} style={{
+          <button onClick={useGPS} disabled={gpsLoading || !mapsReady} style={{
+            opacity: mapsReady ? 1 : 0.6,
             width:"100%", padding:"11px 0", borderRadius:10,
             background:gpsLoading ? C.card2 : `${C.blue}15`,
             border:`1px solid ${gpsLoading ? C.border : C.blue}40`,
             color:gpsLoading ? C.t3 : C.blue, fontSize:13, fontWeight:600,
-            cursor:gpsLoading ? "default" : "pointer",
+            cursor:gpsLoading || !mapsReady ? "default" : "pointer",
           }}>
             {gpsLoading ? "📡 Locating…" : "📡 Use my current location"}
           </button>
+          {!mapsReady && (
+            <p style={{ color: C.gold, fontSize: 11, marginTop: 10 }}>
+              Maps is not ready. Check `NEXT_PUBLIC_GOOGLE_MAPS_KEY` and reload.
+            </p>
+          )}
           <div style={{ marginTop:14, background:"#0C1A14", borderRadius:8, padding:"10px 12px",
             display:"flex", gap:8, alignItems:"flex-start" }}>
             <span style={{ fontSize:13 }}>🔒</span>

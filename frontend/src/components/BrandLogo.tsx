@@ -1,5 +1,9 @@
 import Image from "next/image";
 
+/** Single source of truth — matches the compact landing navbar footprint (~52px). */
+export const BRAND_LOGO_WIDTH = 52;
+export const BRAND_LOGO_HEIGHT = 52;
+
 type BrandLogoProps = {
   width?: number;
   height?: number;
@@ -7,8 +11,8 @@ type BrandLogoProps = {
 };
 
 export default function BrandLogo({
-  width = 106,
-  height = 26,
+  width = BRAND_LOGO_WIDTH,
+  height = BRAND_LOGO_HEIGHT,
   alt = "GigaSouk",
 }: BrandLogoProps) {
   return (
@@ -18,7 +22,13 @@ export default function BrandLogo({
       width={width}
       height={height}
       priority
-      style={{ height: "auto", width: "auto", maxWidth: "100%", background: "transparent", display: "block" }}
+      style={{
+        width,
+        height,
+        objectFit: "contain",
+        background: "transparent",
+        display: "block",
+      }}
     />
   );
 }

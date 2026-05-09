@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { placeOrder, createPayment, verifyPayment } from "../lib/api";
 import { loadRazorpayCheckout } from "../lib/razorpay-checkout";
+import BrandLogo from "./BrandLogo";
 
 const C = {
   bg: "#060810", card: "#0C1018", card2: "#111826", border: "#1A2230",
@@ -112,10 +113,7 @@ export default function GigaSoukProductPage({ customerId }) {
 
       {/* Topbar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-        <div>
-          <span style={{ fontSize: 20, fontWeight: 800, color: C.t1 }}>GIGA</span>
-          <span style={{ fontSize: 20, fontWeight: 800, color: C.green }}>SOUK</span>
-        </div>
+        <BrandLogo />
         <span style={{ fontSize: 12, color: C.t3 }}>Made near you · AI-verified quality</span>
       </div>
 

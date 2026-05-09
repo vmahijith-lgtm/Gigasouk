@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { submitBid, acceptBid, sendMessage, markRead } from "../lib/api";
 import { shortDesignChatLabel } from "../lib/negotiationLabels";
+import BrandLogo from "./BrandLogo";
 
 const C = {
   bg: "#060810",
@@ -363,9 +364,7 @@ export default function GigaSoukNegotiationRoom({
         }}
       >
         <style>{`@keyframes nr-pulse{0%,100%{opacity:.3}50%{opacity:1}}`}</style>
-        <div style={{ fontSize: 22, fontWeight: 900 }}>
-          GIGA<span style={{ color: C.green }}>SOUK</span>
-        </div>
+        <BrandLogo />
         <div
           style={{
             width: 28,

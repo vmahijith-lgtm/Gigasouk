@@ -305,7 +305,7 @@ function SignupForm() {
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <BrandLogo width={142} height={36} />
+            <BrandLogo />
           </div>
           <p style={{ fontSize: 12, color: C.t3, marginTop: 4 }}>
             {hasSession ? "Complete your profile" : "Create your account"}

@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "../../../lib/auth-context";
 import GigaSoukNegotiationRoom from "../../../components/GigaSoukNegotiationRoom";
+import BrandLogo from "../../../components/BrandLogo";
 
 const C = { bg: "#060810", t3: "#5A6A80", border: "#1A2230" };
 
@@ -40,10 +41,9 @@ export default function NegotiationRoomPage() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between",
         alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <span style={{ fontSize: 18, fontWeight: 800, color: "#F4F6FC" }}>GIGA</span>
-          <span style={{ fontSize: 18, fontWeight: 800, color: "#00E5A0" }}>SOUK</span>
-          <span style={{ fontSize: 12, color: C.t3, marginLeft: 10 }}>Negotiation Room</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <BrandLogo />
+          <span style={{ fontSize: 12, color: C.t3 }}>Negotiation Room</span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {/* Back to dashboard */}

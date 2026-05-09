@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { postCreateProfile, type FormState } from "@/lib/auth-utils";
 import { BACKEND_URL } from "@/lib/api";
+import BrandLogo from "@/components/BrandLogo";
 
 const ROLE_HOME: Record<string, string> = {
     designer: "/designer",
@@ -159,15 +160,8 @@ function CompleteContent() {
                 }}
             >
                 {/* Logo */}
-                <div style={{ marginBottom: 28 }}>
-                    <div>
-                        <span style={{ fontSize: 24, fontWeight: 800, color: C.t1 }}>
-                            GIGA
-                        </span>
-                        <span style={{ fontSize: 24, fontWeight: 800, color: C.green }}>
-                            SOUK
-                        </span>
-                    </div>
+                <div style={{ marginBottom: 28, display: "flex", justifyContent: "center" }}>
+                    <BrandLogo />
                 </div>
 
                 {/* Spinner — Always show until redirect happens */}

@@ -133,7 +133,7 @@ function LoginForm() {
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 26 }}>
           <div style={{ marginBottom: 6, display: "flex", justifyContent: "center" }}>
-            <BrandLogo width={150} height={38} />
+            <BrandLogo />
           </div>
           <p style={{ fontSize: 12, color: C.t3 }}>Sign in to your account</p>
         </div>

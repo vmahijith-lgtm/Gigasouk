@@ -118,7 +118,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <BrandLogo width={112} height={28} />
+          <BrandLogo />
           <span style={{ fontSize: 11, color: C.t3, marginLeft: 10 }}>Designer</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
