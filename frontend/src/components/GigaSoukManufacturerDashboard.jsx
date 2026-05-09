@@ -987,7 +987,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                           Workshop / product photos
                         </p>
                         <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.45 }}>
-                          Add photos of your facility or sample parts. Stored under your account; same full-quality viewing as the designer gallery.
+                          Add photos of your facility or sample parts. Secure folder path: <code style={{ fontSize: 11, color: C.gold }}>product-images/{"{your-auth-id}"}/showcase/{c.id}/...</code>. Same full-quality signed viewing as the designer gallery.
                         </p>
                         <input
                           type="file"

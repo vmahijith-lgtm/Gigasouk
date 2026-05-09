@@ -409,7 +409,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                         Product & reference photos
                       </p>
                       <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.45 }}>
-                        Upload high-resolution JPEG, PNG, or WebP. Files go to your secure folder; buyers and makers see signed full-quality links.
+                        Upload high-resolution JPEG, PNG, or WebP. Secure folder path: <code style={{ fontSize: 11, color: C.gold }}>product-images/{"{your-auth-id}"}/designs/{design.id}/...</code>. Buyers and makers view only signed full-quality links.
                       </p>
                       <input
                         type="file"

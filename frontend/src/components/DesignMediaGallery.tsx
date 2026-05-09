@@ -60,6 +60,8 @@ export default function DesignMediaGallery({
   const [showcases, setShowcases] = useState<{ commitment_id: string; images: Img[] }[]>([]);
   /** Index into orderedImages; null = closed */
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  /** In-panel single-slide viewer index (used across all pages). */
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const sf = storefront || emphasizePhotos;
 
@@ -163,6 +165,10 @@ export default function DesignMediaGallery({
     };
   }, [designId, onlyCommitmentId]);
 
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [designId, onlyCommitmentId]);
+
   const openLightbox = useCallback(
     (img: Img) => {
       const idx = orderedImages.findIndex((x) => x.url === img.url && x.filename === img.filename);
@@ -177,6 +183,16 @@ export default function DesignMediaGallery({
     else if (lightboxIndex >= orderedImages.length)
       setLightboxIndex(orderedImages.length - 1);
   }, [lightboxIndex, orderedImages.length]);
+
+  useEffect(() => {
+    if (orderedImages.length === 0) {
+      setActiveIndex(0);
+      return;
+    }
+    if (activeIndex >= orderedImages.length) {
+      setActiveIndex(orderedImages.length - 1);
+    }
+  }, [activeIndex, orderedImages.length]);
 
   if (loading) {
     return (
@@ -409,12 +425,175 @@ export default function DesignMediaGallery({
   const lightboxImg =
     lightboxIndex !== null ? orderedImages[lightboxIndex] ?? null : null;
   const lightboxTotal = orderedImages.length;
+  const activeImg = orderedImages[activeIndex] ?? null;
+  const canSlide = lightboxTotal > 1;
+
+  const moveSlide = useCallback(
+    (delta: number) => {
+      if (!orderedImages.length) return;
+      setActiveIndex((i) => {
+        const next = i + delta;
+        if (next < 0) return 0;
+        if (next >= orderedImages.length) return orderedImages.length - 1;
+        return next;
+      });
+    },
+    [orderedImages.length]
+  );
 
   const inner = (
     <div style={{ marginBottom: panel ? 0 : 20 }}>
       <p style={{ fontSize: 12, fontWeight: 700, color: C.t1, marginBottom: 12 }}>
         {copy.panelHeading} {title ? `· ${title}` : ""}
       </p>
+
+      {activeImg ? (
+        <div
+          style={{
+            marginBottom: 18,
+            borderRadius: 16,
+            overflow: "hidden",
+            border: `1px solid ${C.border}`,
+            background: "#070b12",
+            boxShadow: sf ? "0 12px 32px rgba(0,0,0,.35)" : undefined,
+          }}
+        >
+          <div
+            style={{
+              padding: "10px 12px",
+              borderBottom: `1px solid ${C.border}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 10,
+              background: "#0c1018",
+            }}
+          >
+            <span style={{ fontSize: 11, color: C.t3 }}>
+              {lightboxTotal} image{lightboxTotal === 1 ? "" : "s"} · slide view
+            </span>
+            <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>
+              {activeIndex + 1} / {lightboxTotal}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: canSlide ? "56px 1fr 56px" : "1fr",
+              alignItems: "center",
+              gap: 0,
+            }}
+          >
+            {canSlide ? (
+              <button
+                type="button"
+                aria-label="Previous image"
+                onClick={() => moveSlide(-1)}
+                disabled={activeIndex <= 0}
+                style={{
+                  height: "100%",
+                  minHeight: sf ? 360 : 300,
+                  border: "none",
+                  borderRight: `1px solid ${C.border}`,
+                  background: "#111826",
+                  color: activeIndex > 0 ? C.t1 : C.t3,
+                  fontSize: 18,
+                  fontWeight: 800,
+                  cursor: activeIndex > 0 ? "pointer" : "not-allowed",
+                }}
+              >
+                ‹
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => openLightbox(activeImg)}
+              style={{
+                border: "none",
+                padding: 0,
+                margin: 0,
+                background: "#070b12",
+                cursor: "zoom-in",
+              }}
+              aria-label="Open image viewer"
+            >
+              <img
+                src={activeImg.url}
+                alt={activeImg.filename}
+                style={{
+                  width: "100%",
+                  maxHeight: sf ? 420 : 340,
+                  objectFit: "contain",
+                  display: "block",
+                }}
+              />
+            </button>
+
+            {canSlide ? (
+              <button
+                type="button"
+                aria-label="Next image"
+                onClick={() => moveSlide(1)}
+                disabled={activeIndex >= lightboxTotal - 1}
+                style={{
+                  height: "100%",
+                  minHeight: sf ? 360 : 300,
+                  border: "none",
+                  borderLeft: `1px solid ${C.border}`,
+                  background: "#111826",
+                  color: activeIndex < lightboxTotal - 1 ? C.t1 : C.t3,
+                  fontSize: 18,
+                  fontWeight: 800,
+                  cursor: activeIndex < lightboxTotal - 1 ? "pointer" : "not-allowed",
+                }}
+              >
+                ›
+              </button>
+            ) : null}
+          </div>
+
+          {canSlide ? (
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                padding: "10px 12px",
+                borderTop: `1px solid ${C.border}`,
+                background: "#0c1018",
+              }}
+            >
+              {orderedImages.map((im, idx) => (
+                <button
+                  key={`${im.url}-${idx}`}
+                  type="button"
+                  onClick={() => setActiveIndex(idx)}
+                  style={{
+                    flex: "0 0 auto",
+                    width: 64,
+                    height: 64,
+                    padding: 0,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    border: `1px solid ${idx === activeIndex ? C.green : C.border}`,
+                    background: "#111826",
+                    cursor: "pointer",
+                  }}
+                  aria-label={`Go to image ${idx + 1}`}
+                >
+                  <img
+                    src={im.url}
+                    alt={im.filename}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {showListingHero ? (
         <div style={{ marginBottom: 18 }}>
