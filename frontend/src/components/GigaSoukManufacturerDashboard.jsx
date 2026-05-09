@@ -13,6 +13,7 @@ import {
   getMyCommitments,
   updateCommitmentShowcase,
   withdrawCommitment,
+  getFinanceSummary,
   BACKEND_URL,
 } from "../lib/api";
 import { MACHINE_OPTIONS, MATERIAL_OPTIONS } from "../lib/workshop-tags";
@@ -134,8 +135,10 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
   /** commitment id → signed URLs for immediate thumbnails (storage paths are not viewable in <img> alone). */
   const [showcaseThumbs, setShowcaseThumbs] = useState({});
   const [jobs, setJobs] = useState([]);
+  const [earningsOrders, setEarningsOrders] = useState([]);
   const [commitments, setCommitments] = useState([]);
   const [payouts, setPayouts] = useState([]);
+  const [finance, setFinance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [qcOrder, setQcOrder] = useState(null);
   const [photos, setPhotos] = useState([]);
@@ -157,7 +160,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        const [meRes, jRes, commList, oIdsRes] = await Promise.all([
+        const [meRes, jRes, commList, oIdsRes, earningsRes, finRes] = await Promise.all([
           token
             ? fetch(`${BACKEND_URL}/api/auth/me`, {
               headers: { Authorization: `Bearer ${token}` },
@@ -171,6 +174,13 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
             .order("created_at", { ascending: false }),
           token ? getMyCommitments().then(r => r.data).catch(() => []) : Promise.resolve([]),
           supabase.from("orders").select("id").eq("manufacturer_id", manufacturerId),
+          supabase
+            .from("orders")
+            .select("id, order_ref, payment_status, locked_price, committed_price, created_at")
+            .eq("manufacturer_id", manufacturerId)
+            .order("created_at", { ascending: false })
+            .limit(120),
+          token ? getFinanceSummary().then((r) => r.data).catch(() => null) : Promise.resolve(null),
         ]);
 
         // Payouts: query payouts only for the manufacturer's orders
@@ -192,6 +202,8 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         setMachinesDraft([...(m.machine_types || [])]);
         setMaterialsDraft([...(m.materials || [])]);
         setJobs(jRes.data || []);
+        setEarningsOrders(earningsRes.data || []);
+        setFinance(finRes || null);
         setCommitments(Array.isArray(commList) ? commList : []);
         setPayouts(payoutRows);
       } finally {
@@ -491,7 +503,27 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
     }
   }
 
-  const totalEarnings = payouts.reduce((s, p) => s + Number(p.manufacturer_amount || 0), 0);
+  const totalEarnings = Number(
+    finance?.released_payout_total ??
+    payouts.reduce((s, p) => s + Number(p.manufacturer_amount || 0), 0)
+  );
+  const escrowAmount = Number(
+    finance?.escrow_gross_value ??
+    earningsOrders
+      .filter((o) => o.payment_status === "in_escrow")
+      .reduce((sum, o) => sum + Number(o.locked_price || o.committed_price || 0), 0)
+  );
+  const pendingAmount = Number(
+    finance?.pending_gross_value ??
+    earningsOrders
+      .filter((o) => o.payment_status === "pending")
+      .reduce((sum, o) => sum + Number(o.locked_price || o.committed_price || 0), 0)
+  );
+  const escrowNetEstimate = Number(finance?.escrow_net_estimate ?? 0);
+  const pendingNetEstimate = Number(finance?.pending_net_estimate ?? 0);
+  const releasedCount = Number(finance?.released_orders_count ?? earningsOrders.filter((o) => o.payment_status === "released").length);
+  const escrowCount = Number(finance?.escrow_orders_count ?? earningsOrders.filter((o) => o.payment_status === "in_escrow").length);
+  const pendingCount = Number(finance?.pending_orders_count ?? earningsOrders.filter((o) => o.payment_status === "pending").length);
   const qcReadyJobs = jobs.filter(j => j.status === "cutting" || j.status === "qc_failed");
 
   const actions = [
@@ -1401,19 +1433,54 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
               Customer payments run through Razorpay (escrow). You receive net amounts here after delivery triggers release. Shiprocket keys stay on the server only.
             </p>
           </div>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Active jobs · payment status</h3>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+            gap: 10,
+            marginBottom: 20,
+          }}>
+            {[
+              { label: "Released payout total", value: `₹${totalEarnings.toLocaleString("en-IN")}`, color: C.green },
+              { label: "Orders in escrow", value: `${escrowCount}`, color: C.gold },
+              { label: "Escrow gross value", value: `₹${escrowAmount.toLocaleString("en-IN")}`, color: C.blue },
+              { label: "Pending payments", value: `${pendingCount}`, color: C.purple },
+              { label: "Pending gross value", value: `₹${pendingAmount.toLocaleString("en-IN")}`, color: C.t2 },
+              { label: "Escrow net estimate", value: `₹${escrowNetEstimate.toLocaleString("en-IN")}`, color: C.green },
+              { label: "Pending net estimate", value: `₹${pendingNetEstimate.toLocaleString("en-IN")}`, color: C.gold },
+              { label: "Released orders", value: `${releasedCount}`, color: C.green },
+            ].map((k) => (
+              <div key={k.label} style={{
+                background: C.card2, border: `1px solid ${C.border}`,
+                borderRadius: 10, padding: "12px 14px",
+              }}>
+                <p style={{ fontSize: 11, color: C.t3 }}>{k.label}</p>
+                <p style={{ fontSize: 19, fontWeight: 800, color: k.color, marginTop: 6 }}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Orders · payment status</h3>
           <p style={{ fontSize: 12, color: C.t3, marginBottom: 10 }}>
             in_escrow = customer paid, funds held. pending = not paid yet. released = payout recorded below.
           </p>
-          {jobs.length === 0 && <p style={{ color: C.t3, fontSize: 13, marginBottom: 16 }}>No active jobs.</p>}
-          {jobs.slice(0, 20).map(j => (
+          {earningsOrders.length === 0 && <p style={{ color: C.t3, fontSize: 13, marginBottom: 16 }}>No orders yet.</p>}
+          {earningsOrders.slice(0, 20).map(j => (
             <div key={j.id} style={{
               background: C.card2, border: `1px solid ${C.border}`,
               borderRadius: 8, padding: "10px 14px", marginBottom: 8,
               display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8,
             }}>
-              <span style={{ fontSize: 13 }}>{j.order_ref}</span>
-              <span style={{ fontSize: 11, color: C.t3 }}>{j.payment_status || "pending"}</span>
+              <div>
+                <p style={{ fontSize: 13, color: C.t1 }}>{j.order_ref}</p>
+                <p style={{ fontSize: 11, color: C.t3 }}>
+                  {new Date(j.created_at).toLocaleDateString("en-IN")}
+                </p>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: 12, color: C.t2 }}>
+                  ₹{Number(j.locked_price || j.committed_price || 0).toLocaleString("en-IN")}
+                </p>
+                <p style={{ fontSize: 11, color: C.t3 }}>{j.payment_status || "pending"}</p>
+              </div>
             </div>
           ))}
           <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12, marginTop: 20 }}>Payout history</h3>

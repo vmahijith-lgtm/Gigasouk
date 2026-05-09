@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from db import db_admin, get_one
 from services.activity_audit import audit_user_activity
+from config import PLATFORM_FEE_PERCENT, DESIGNER_ROYALTY_PERCENT
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -599,6 +600,138 @@ def get_wallet_transactions(
         .execute()
     )
     return {"transactions": res.data or []}
+
+
+@router.get("/me/finance-summary")
+def get_finance_summary(
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Canonical server-side finance summary used by designer/manufacturer dashboards.
+    Keeps UI calculations aligned with backend payout logic.
+    """
+    payload = verify_jwt(authorization)
+    auth_uid = payload.get("sub")
+    if not auth_uid:
+        raise HTTPException(401, "Invalid token")
+
+    profile = get_one("profiles", {"auth_id": auth_uid})
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+
+    role = profile.get("role")
+
+    def _as_amount(v) -> float:
+        try:
+            return float(v or 0)
+        except Exception:
+            return 0.0
+
+    if role == "designer":
+        design_rows = (
+            db_admin.table("designs")
+            .select("id")
+            .eq("designer_id", profile["id"])
+            .execute()
+            .data
+        ) or []
+        design_ids = [d["id"] for d in design_rows if d.get("id")]
+
+        orders = []
+        payouts = []
+        if design_ids:
+            orders = (
+                db_admin.table("orders")
+                .select("id, payment_status, locked_price, committed_price")
+                .in_("design_id", design_ids)
+                .execute()
+                .data
+            ) or []
+            order_ids = [o["id"] for o in orders if o.get("id")]
+            if order_ids:
+                payouts = (
+                    db_admin.table("payouts")
+                    .select("order_id, designer_royalty")
+                    .in_("order_id", order_ids)
+                    .execute()
+                    .data
+                ) or []
+
+        released_royalty_total = round(sum(_as_amount(p.get("designer_royalty")) for p in payouts), 2)
+        escrow_orders = [o for o in orders if o.get("payment_status") == "in_escrow"]
+        pending_orders = [o for o in orders if o.get("payment_status") == "pending"]
+        released_orders = [o for o in orders if o.get("payment_status") == "released"]
+
+        def _royalty_estimate(order: dict) -> float:
+            gross = _as_amount(order.get("locked_price") or order.get("committed_price"))
+            if gross <= 0:
+                return 0.0
+            return round((gross * (1 - PLATFORM_FEE_PERCENT)) * DESIGNER_ROYALTY_PERCENT, 2)
+
+        escrow_royalty_estimate = round(sum(_royalty_estimate(o) for o in escrow_orders), 2)
+        pending_royalty_estimate = round(sum(_royalty_estimate(o) for o in pending_orders), 2)
+
+        return {
+            "role": "designer",
+            "wallet_balance": _as_amount(profile.get("wallet_balance")),
+            "released_royalty_total": released_royalty_total,
+            "released_orders_count": len(released_orders),
+            "escrow_orders_count": len(escrow_orders),
+            "pending_orders_count": len(pending_orders),
+            "escrow_royalty_estimate": escrow_royalty_estimate,
+            "pending_royalty_estimate": pending_royalty_estimate,
+        }
+
+    if role == "manufacturer":
+        mfr = get_one("manufacturers", {"profile_id": profile["id"]})
+        if not mfr:
+            raise HTTPException(404, "Manufacturer profile not found")
+
+        orders = (
+            db_admin.table("orders")
+            .select("id, payment_status, locked_price, committed_price")
+            .eq("manufacturer_id", mfr["id"])
+            .execute()
+            .data
+        ) or []
+        order_ids = [o["id"] for o in orders if o.get("id")]
+        payouts = []
+        if order_ids:
+            payouts = (
+                db_admin.table("payouts")
+                .select("order_id, manufacturer_amount")
+                .in_("order_id", order_ids)
+                .execute()
+                .data
+            ) or []
+
+        released_payout_total = round(sum(_as_amount(p.get("manufacturer_amount")) for p in payouts), 2)
+        escrow_orders = [o for o in orders if o.get("payment_status") == "in_escrow"]
+        pending_orders = [o for o in orders if o.get("payment_status") == "pending"]
+        released_orders = [o for o in orders if o.get("payment_status") == "released"]
+
+        def _gross(order: dict) -> float:
+            return _as_amount(order.get("locked_price") or order.get("committed_price"))
+
+        escrow_gross = round(sum(_gross(o) for o in escrow_orders), 2)
+        pending_gross = round(sum(_gross(o) for o in pending_orders), 2)
+        net_multiplier = (1 - PLATFORM_FEE_PERCENT) * (1 - DESIGNER_ROYALTY_PERCENT)
+        escrow_net_estimate = round(escrow_gross * net_multiplier, 2)
+        pending_net_estimate = round(pending_gross * net_multiplier, 2)
+
+        return {
+            "role": "manufacturer",
+            "released_payout_total": released_payout_total,
+            "released_orders_count": len(released_orders),
+            "escrow_orders_count": len(escrow_orders),
+            "pending_orders_count": len(pending_orders),
+            "escrow_gross_value": escrow_gross,
+            "pending_gross_value": pending_gross,
+            "escrow_net_estimate": escrow_net_estimate,
+            "pending_net_estimate": pending_net_estimate,
+        }
+
+    raise HTTPException(403, "Finance summary is available only for designer/manufacturer roles")
 
 
 class PreferredDeliveryBody(BaseModel):

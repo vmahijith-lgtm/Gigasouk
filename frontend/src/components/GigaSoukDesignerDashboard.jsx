@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import { getWalletTransactions, BACKEND_URL } from "../lib/api";
+import { getWalletTransactions, getFinanceSummary, BACKEND_URL } from "../lib/api";
 import GigaSoukStagingArea from "./GigaSoukStagingArea";
 import NegotiationList from "./NegotiationList";
 import DesignMediaGallery from "./DesignMediaGallery";
@@ -34,6 +34,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
   const [orders, setOrders] = useState([]);
   const [wallet, setWallet] = useState(0);
   const [txns, setTxns] = useState([]);
+  const [finance, setFinance] = useState(null);
   const [profile, setProfile] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +51,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
 
-        const [meRes, sRes, oRes, txnPack] = await Promise.all([
+        const [meRes, sRes, oRes, txnPack, finRes] = await Promise.all([
           token
             ? fetch(`${BACKEND_URL}/api/auth/me`, {
               headers: { Authorization: `Bearer ${token}` },
@@ -63,12 +64,15 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
           supabase.from("orders")
             .select("id, design_id, order_ref, status, payment_status, locked_price, committed_price, created_at, designs!inner(title, designer_id)")
             .eq("designs.designer_id", designerId)
-            .order("created_at", { ascending: false }).limit(20),
+            .order("created_at", { ascending: false }).limit(80),
           token
             ? getWalletTransactions(40)
                 .then((r) => r.data?.transactions || [])
                 .catch(() => [])
             : Promise.resolve([]),
+          token
+            ? getFinanceSummary().then((r) => r.data).catch(() => null)
+            : Promise.resolve(null),
         ]);
 
         const me = meRes?.profile || {};
@@ -77,6 +81,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
         setOrders(oRes.data || []);
         setTxns(txnPack || []);
         setWallet(me.wallet_balance || 0);
+        setFinance(finRes || null);
       } finally {
         setLoading(false);
       }
@@ -84,6 +89,17 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
   }, [designerId]);
 
   const statusColor = { live: "#00E5A0", seeking: "#F5A623", committed: "#4A9EFF", draft: "#5A6A80", paused: "#F87171" };
+  const totalRoyaltiesEarned = Number(finance?.released_royalty_total ?? stats.total_royalties_earned ?? 0);
+  const releasedOrderCount = Number(finance?.released_orders_count ?? orders.filter((o) => o.payment_status === "released").length);
+  const escrowOrderCount = Number(finance?.escrow_orders_count ?? orders.filter((o) => o.payment_status === "in_escrow").length);
+  const pendingOrderCount = Number(finance?.pending_orders_count ?? orders.filter((o) => o.payment_status === "pending").length);
+  const escrowRoyaltyEstimate = Number(
+    finance?.escrow_royalty_estimate ??
+    orders
+      .filter((o) => o.payment_status === "in_escrow")
+      .reduce((sum, o) => sum + Number(o.locked_price || o.committed_price || 0), 0)
+  );
+  const pendingRoyaltyEstimate = Number(finance?.pending_royalty_estimate ?? 0);
 
   const actions = [
     {
@@ -256,7 +272,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
       {/* ── EARNINGS TAB ─────────────────────────────────────────── */}
       {tab === "earnings" && (
         <div>
-            <div style={{
+          <div style={{
             background: C.card, border: `1px solid ${C.green}`, borderRadius: 10,
             padding: "20px 24px", marginBottom: 20
           }}>
@@ -268,7 +284,56 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
               Royalties are credited after delivery and escrow release.
             </p>
           </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))",
+            gap: 10,
+            marginBottom: 20,
+          }}>
+            {[
+              { label: "Total royalties (released)", value: `₹${totalRoyaltiesEarned.toLocaleString("en-IN")}`, color: C.green },
+              { label: "Orders in escrow", value: `${escrowOrderCount}`, color: C.gold },
+              { label: "Escrow royalty estimate", value: `₹${escrowRoyaltyEstimate.toLocaleString("en-IN")}`, color: C.blue },
+              { label: "Pending royalty estimate", value: `₹${pendingRoyaltyEstimate.toLocaleString("en-IN")}`, color: C.purple },
+              { label: "Pending payments", value: `${pendingOrderCount}`, color: C.purple },
+              { label: "Released orders", value: `${releasedOrderCount}`, color: C.t2 },
+            ].map((k) => (
+              <div key={k.label} style={{
+                background: C.card2, border: `1px solid ${C.border}`,
+                borderRadius: 10, padding: "12px 14px",
+              }}>
+                <p style={{ fontSize: 11, color: C.t3 }}>{k.label}</p>
+                <p style={{ fontSize: 19, fontWeight: 800, color: k.color, marginTop: 6 }}>{k.value}</p>
+              </div>
+            ))}
+          </div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>
+            Orders · payment state
+          </h3>
+          {orders.length === 0 ? (
+            <p style={{ color: C.t3, marginBottom: 16 }}>No orders yet.</p>
+          ) : (
+            orders.slice(0, 20).map((o) => (
+              <div key={o.id} style={{
+                background: C.card2, border: `1px solid ${C.border}`,
+                borderRadius: 8, padding: "10px 14px", marginBottom: 8,
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap",
+              }}>
+                <div>
+                  <p style={{ fontSize: 13, color: C.t1 }}>{o.order_ref}</p>
+                  <p style={{ fontSize: 11, color: C.t3 }}>{o.designs?.title}</p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <p style={{ fontSize: 12, color: C.t2 }}>
+                    ₹{Number(o.locked_price || o.committed_price || 0).toLocaleString("en-IN")}
+                  </p>
+                  <p style={{ fontSize: 11, color: C.t3 }}>{o.payment_status || "pending"}</p>
+                </div>
+              </div>
+            ))
+          )}
           <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Transaction history</h3>
+          {txns.length === 0 && <p style={{ color: C.t3, marginBottom: 10 }}>No transactions yet.</p>}
           {txns.map(t => (
             <div key={t.id} style={{
               background: C.card, border: `1px solid ${C.border}`,

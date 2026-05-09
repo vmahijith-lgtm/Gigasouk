@@ -85,6 +85,8 @@ export const updatePreferredDelivery = (data: object) =>
 
 export const getWalletTransactions = (limit = 100) =>
   api.get("/api/auth/me/wallet-transactions", { params: { limit } });
+export const getFinanceSummary = () =>
+  api.get("/api/auth/me/finance-summary");
 
 // ── Orders ────────────────────────────────────────────────────────
 export const placeOrder        = (data: object)         => api.post("/api/v1/orders", data);
