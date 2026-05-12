@@ -137,7 +137,10 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
   ];
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "20px 16px", fontFamily: "Inter,sans-serif", color: C.t1 }}>
+    <div style={{
+      background: C.bg, minHeight: "100vh", padding: "20px clamp(12px, 4vw, 16px)",
+      fontFamily: "Inter,sans-serif", color: C.t1, width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box",
+    }}>
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
@@ -222,13 +225,17 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
+      <div style={{
+        display: "flex", borderBottom: `1px solid ${C.border}`, marginBottom: 24,
+        overflowX: "auto", WebkitOverflowScrolling: "touch", minWidth: 0, gap: 0,
+      }}>
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{
               padding: "10px 20px", border: "none", background: "none", cursor: "pointer",
               color: tab === t.key ? C.green : C.t3, fontWeight: tab === t.key ? 700 : 400,
-              fontSize: 14, borderBottom: `2px solid ${tab === t.key ? C.green : "transparent"}`
+              fontSize: 14, borderBottom: `2px solid ${tab === t.key ? C.green : "transparent"}`,
+              whiteSpace: "nowrap", flexShrink: 0,
             }}>
             {t.label}
           </button>

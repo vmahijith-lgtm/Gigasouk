@@ -170,6 +170,7 @@ export default function HomePage() {
       minHeight:"100dvh",
       width:"100%",
       maxWidth:"100%",
+      minWidth: 0,
       boxSizing:"border-box",
       fontFamily:"Inter,sans-serif",
       color:T.t1,
@@ -190,14 +191,14 @@ export default function HomePage() {
         <div style={{display:"flex",alignItems:"center"}}>
           <BrandLogo />
         </div>
-        <div style={{display:"flex",gap:10,alignItems:"center",minHeight:36}}>
+        <div style={{display:"flex",gap:10,alignItems:"center",minHeight:36,flexWrap:"wrap",justifyContent:"flex-end",minWidth:0,maxWidth:"100%"}}>
           {loading ? (
             <span style={{fontSize:12,color:T.t3,letterSpacing:"0.12em"}} aria-busy>
               Session…
             </span>
           ) : user ? (
             <>
-              <span style={{fontSize:13,color:T.t2}}>{user.fullName}</span>
+              <span style={{fontSize:13,color:T.t2,maxWidth:"min(200px, 42vw)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={user.fullName}>{user.fullName}</span>
               {user.role === "customer" && (
                 <NavBtn href="/customer" label="My dashboard" ghost />
               )}
@@ -265,7 +266,7 @@ export default function HomePage() {
             letterSpacing:"-0.5px"}}>Shop the catalog</h2>
 
           <div style={{display:"flex",gap:12,marginBottom:24,flexWrap:"wrap",alignItems:"center"}}>
-            <div style={{flex:1,minWidth:220,display:"flex",alignItems:"center",gap:8,
+            <div style={{flex:"1 1 200px",minWidth:0,maxWidth:"100%",display:"flex",alignItems:"center",gap:8,
               background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:"0 14px"}}>
               <span style={{color:T.t3,fontSize:16}}>🔍</span>
               <input value={search} onChange={e=>setSearch(e.target.value)}
@@ -301,7 +302,7 @@ export default function HomePage() {
               <p style={{fontSize:15}}>No products available yet. Listings appear when a design is live or at least one factory has committed.</p>
             </div>
           )}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:20}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(min(260px, 100%), 1fr))",gap:20,width:"100%",minWidth:0}}>
             {filtered.map(d=>(
               <div key={d.id} className="card-hover"
                 onClick={()=>{setSelected(d);setOrderMsg("");}}
@@ -385,13 +386,13 @@ export default function HomePage() {
       {/* ── Footer ──────────────────────────────────────────────── */}
       <footer style={{padding:`24px ${padX}`,borderTop:`1px solid ${T.border}`,
         display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
           <BrandLogo />
           <p style={{fontSize:12,color:T.t3,marginTop:2}}>
             © 2026 · Cloud Factory Infrastructure for India
           </p>
         </div>
-        <div style={{display:"flex",gap:20}}>
+        <div style={{display:"flex",gap:20,flexWrap:"wrap",justifyContent:"flex-end"}}>
           {[
             {href:"/auth/login",label:"Designer Login"},
             {href:"/auth/login",label:"Manufacturer Login"},
@@ -410,7 +411,7 @@ export default function HomePage() {
             display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 20px",
             overflowY:"auto"}}>
           <div onClick={e=>e.stopPropagation()}
-            style={{width:"100%",maxWidth:680,marginTop:12,marginBottom:24}}>
+            style={{width:"100%",maxWidth:680,minWidth:0,marginTop:12,marginBottom:24,boxSizing:"border-box"}}>
 
             <DesignMediaGallery
               designId={selected.id}

@@ -26,20 +26,47 @@
 
   html {
     overflow-x: clip;
+    max-width: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
 
-  body {
+  body.gs-body {
     margin: 0;
     min-height: 100vh;
     min-height: 100dvh;
     width: 100%;
+    max-width: 100%;
     overflow-x: clip;
     background: var(--bg);
     color: var(--t1);
     font-family: Inter, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /**
+   * Root wrapper: keeps flex/grid descendants from widening past the viewport
+   * (classic “min-width: auto” overflow on mobile).
+   */
+  .gs-app-shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 100dvh;
+    box-sizing: border-box;
+  }
+
+  .gs-app-shell img,
+  .gs-app-shell video,
+  .gs-app-shell canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .gs-app-shell pre {
+    max-width: 100%;
+    overflow-x: auto;
+    box-sizing: border-box;
   }
 }
 

@@ -342,17 +342,18 @@ function SignupForm() {
           fontSize: 11, fontWeight: 700, color: C.t3, textTransform: "uppercase",
           letterSpacing: ".06em", marginBottom: 10
         }}>I am a…</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(110px, 100%), 1fr))", gap: 8, marginBottom: 24 }}>
           {ROLE_OPTIONS.map(r => (
             <button key={r.key} id={`role-${r.key}`} type="button" onClick={() => handleRoleSelect(r.key)}
               style={{
                 padding: "12px 8px", borderRadius: 10, cursor: "pointer", textAlign: "center",
                 border: `1px solid ${role === r.key ? C.green : C.border}`,
-                background: role === r.key ? C.green + "18" : C.card2, transition: "all .15s"
+                background: role === r.key ? C.green + "18" : C.card2, transition: "all .15s",
+                minWidth: 0, overflow: "hidden",
               }}>
               <div style={{ fontSize: 20, marginBottom: 4 }}>{r.icon}</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: role === r.key ? C.green : C.t2 }}>{r.label}</div>
-              <div style={{ fontSize: 10, color: C.t3, marginTop: 2, lineHeight: 1.3 }}>{r.desc}</div>
+              <div style={{ fontSize: 10, color: C.t3, marginTop: 2, lineHeight: 1.3, overflowWrap: "break-word", wordBreak: "break-word" }}>{r.desc}</div>
             </button>
           ))}
         </div>

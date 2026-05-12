@@ -35,17 +35,17 @@ export default function NegotiationRoomPage() {
   const userRole = user.role as "designer" | "manufacturer";
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "20px 16px",
-      fontFamily: "Inter,sans-serif", position: "relative" }}>
+    <div style={{ background: C.bg, minHeight: "100vh", padding: "20px clamp(12px, 4vw, 16px)",
+      fontFamily: "Inter,sans-serif", position: "relative", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between",
-        alignItems: "center", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
           <BrandLogo />
           <span style={{ fontSize: 12, color: C.t3 }}>Negotiation Room</span>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           {/* Back to dashboard */}
           <a href={userRole === "designer" ? "/designer" : "/manufacturer"}
             style={{ fontSize: 12, color: C.t3, textDecoration: "none",
@@ -61,7 +61,7 @@ export default function NegotiationRoomPage() {
       </div>
 
       {/* Negotiation Room component */}
-      <div style={{ maxWidth: 960, margin: "0 auto" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto", width: "100%", minWidth: 0 }}>
         <GigaSoukNegotiationRoom
           roomId={roomId}
           userId={user.profileId}

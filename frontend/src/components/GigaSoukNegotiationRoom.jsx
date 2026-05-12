@@ -434,6 +434,9 @@ export default function GigaSoukNegotiationRoom({
         display: "flex",
         flexDirection: "column",
         fontFamily: "Inter,sans-serif",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
         ...shellHeight,
       }}
     >

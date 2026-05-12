@@ -173,11 +173,12 @@ export default function FactoryFinderMap({ designId, designTitle, onSelect, onCa
 
   return (
     <div style={{ background:C.bg, borderRadius:16, overflow:"hidden",
-      border:`1px solid ${C.border}`, fontFamily:"Inter,sans-serif" }}>
+      border:`1px solid ${C.border}`, fontFamily:"Inter,sans-serif",
+      width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div style={{ background:C.card, padding:"16px 20px", borderBottom:`1px solid ${C.border}`,
-        display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+      <div style={{ background:C.card, padding:"16px clamp(12px, 3vw, 20px)", borderBottom:`1px solid ${C.border}`,
+        display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ color:C.t1, fontWeight:700, fontSize:15 }}>🏭 Delivery & factory</div>
           <div style={{ color:C.t3, fontSize:11, marginTop:2 }}>{designTitle}</div>

@@ -45,9 +45,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           />
         ) : null}
       </head>
-      <body>
+      <body className="gs-body">
         <AuthProvider>
-          {children}
+          <div className="gs-app-shell">{children}</div>
         </AuthProvider>
       </body>
     </html>

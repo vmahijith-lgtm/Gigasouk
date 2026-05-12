@@ -119,12 +119,13 @@ export default function TrackOrderPage() {
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"Inter, sans-serif",
-      padding:"40px 20px", color:C.t1 }}>
+      padding:"clamp(16px, 4vw, 40px) clamp(14px, 4vw, 20px)", color:C.t1,
+      width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
         @keyframes glow{0%,100%{box-shadow:0 0 8px #00E5A040}50%{box-shadow:0 0 16px #00E5A080}}
       `}</style>
-      <div style={{ maxWidth:720, margin:"0 auto" }}>
+      <div style={{ maxWidth:720, margin:"0 auto", width: "100%", minWidth: 0 }}>
 
         {/* ── Header ───────────────────────────────────────────── */}
         <div style={{ marginBottom:28 }}>
@@ -164,8 +165,9 @@ export default function TrackOrderPage() {
             Order Progress
           </div>
 
-          {/* Horizontal stepper — correct positioning */}
-          <div style={{ display:"flex", alignItems:"flex-start" }}>
+          {/* Horizontal stepper — scroll on narrow viewports */}
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", width: "100%", marginBottom: 4 }}>
+            <div style={{ display:"flex", alignItems:"flex-start", minWidth: Math.max(480, STAGES.length * 72) }}>
             {STAGES.map((stage, i) => {
               const done    = currentStageIdx >= 0 && i <= currentStageIdx;
               const current = i === currentStageIdx;
@@ -214,6 +216,7 @@ export default function TrackOrderPage() {
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
 
@@ -237,7 +240,7 @@ export default function TrackOrderPage() {
           <div style={{ color:C.t2, fontSize:13, fontWeight:600, marginBottom:16 }}>
             Order Details
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(min(140px, 100%), 1fr))", gap:12 }}>
             {[
               { label:"Design",        value: order.designs?.title || "—" },
               { label:"Factory City",  value: mfr.city || "—" },
@@ -254,7 +257,7 @@ export default function TrackOrderPage() {
                   letterSpacing:".06em", marginBottom:5 }}>
                   {label}
                 </div>
-                <div style={{ color:C.t1, fontSize:14, fontWeight:600 }}>
+                <div style={{ color:C.t1, fontSize:14, fontWeight:600, overflowWrap:"anywhere", wordBreak:"break-word" }}>
                   {String(value)}
                 </div>
               </div>

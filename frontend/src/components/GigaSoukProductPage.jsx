@@ -109,7 +109,7 @@ export default function GigaSoukProductPage({ customerId }) {
 
   // ── UI ──────────────────────────────────────────────────────────
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", padding: "24px 20px", fontFamily: "Inter, sans-serif" }}>
+    <div style={{ background: C.bg, minHeight: "100vh", padding: "24px clamp(14px, 4vw, 20px)", fontFamily: "Inter, sans-serif", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
 
       {/* Topbar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
@@ -121,7 +121,7 @@ export default function GigaSoukProductPage({ customerId }) {
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Search products..."
-          style={{ flex: 1, minWidth: 200, background: C.card, border: `1px solid ${C.border}`,
+          style={{ flex: 1, minWidth: 0, maxWidth: "100%", background: C.card, border: `1px solid ${C.border}`,
             borderRadius: 8, padding: "10px 14px", color: C.t1, fontSize: 14, outline: "none" }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {categories.map(cat => (
@@ -148,7 +148,7 @@ export default function GigaSoukProductPage({ customerId }) {
       {loading && <p style={{ color: C.t3, textAlign: "center", padding: 60 }}>Loading products...</p>}
 
       {/* Product grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))", gap: 16, width: "100%", minWidth: 0 }}>
         {filtered.map(design => (
           <div key={design.id} onClick={() => setSelected(design)}
             style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,

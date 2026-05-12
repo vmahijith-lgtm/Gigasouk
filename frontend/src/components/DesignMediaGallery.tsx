@@ -263,16 +263,18 @@ export default function DesignMediaGallery({
   const showGalleryHeroFallback = sf && !showListingHero && gallery.length > 0;
   const galleryGridItems = showGalleryHeroFallback ? gallery.slice(1) : gallery;
 
-  const thumbMin = sf ? "minmax(120px, 1fr)" : "minmax(140px, 1fr)";
+  const thumbMin = sf ? "minmax(min(120px, 100%), 1fr)" : "minmax(min(140px, 100%), 1fr)";
   const thumbH = emphasizePhotos ? 240 : sf ? 200 : 180;
   const gridStyle = {
     display: "grid" as const,
     gridTemplateColumns: sf
       ? `repeat(auto-fill, ${thumbMin})`
       : emphasizePhotos
-        ? "repeat(auto-fill, minmax(200px, 1fr))"
-        : "repeat(auto-fill, minmax(160px, 1fr))",
+        ? "repeat(auto-fill, minmax(min(200px, 100%), 1fr))"
+        : "repeat(auto-fill, minmax(min(160px, 100%), 1fr))",
     gap: sf ? 14 : 12,
+    width: "100%" as const,
+    minWidth: 0 as const,
   };
 
   function tile(img: Img, key: string) {

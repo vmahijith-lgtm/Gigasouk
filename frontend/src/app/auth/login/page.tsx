@@ -121,8 +121,8 @@ function LoginForm() {
   return (
     <div style={{
       background: C.bg, minHeight: "100vh", display: "flex",
-      alignItems: "center", justifyContent: "center", padding: 20,
-      fontFamily: "Inter,sans-serif"
+      alignItems: "center", justifyContent: "center", padding: "clamp(16px, 4vw, 20px)",
+      fontFamily: "Inter,sans-serif", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box",
     }}>
 
       {/* Card */}

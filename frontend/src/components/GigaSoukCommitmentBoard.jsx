@@ -355,7 +355,8 @@ function CommitPanel({ design, commitPrice, setCommitPrice, workshopCity, worksh
   return (
     <div style={{ position: "fixed", inset: 0, background: "#00000088", zIndex: 50,
       display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
-      <div style={{ width: "min(480px, 100vw)", background: C.card, height: "100%",
+      <div style={{ width: "min(480px, 100%)", maxWidth: "100%", boxSizing: "border-box",
+        background: C.card, height: "100%",
         overflowY: "auto", padding: 28, borderLeft: `1px solid ${C.border}` }}
         onClick={e => e.stopPropagation()}>
 

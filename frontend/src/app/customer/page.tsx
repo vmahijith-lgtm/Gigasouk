@@ -169,8 +169,8 @@ export default function CustomerDashboardPage() {
   const pd = user.preferredDelivery;
 
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", color: T.t1, fontFamily: "Inter, sans-serif", padding: "24px clamp(16px,4vw,40px)" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+    <div style={{ background: T.bg, minHeight: "100vh", color: T.t1, fontFamily: "Inter, sans-serif", padding: "24px clamp(16px, 4vw, 40px)", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto", width: "100%", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>My GigaSouk</h1>
@@ -318,7 +318,7 @@ export default function CustomerDashboardPage() {
           <p style={{ fontSize: 13, color: T.t3, marginBottom: 16 }}>
             Shown when at least one factory has committed, or the listing is live.
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(220px, 100%), 1fr))", gap: 14, width: "100%", minWidth: 0 }}>
             {catalog.map((d) => (
               <Link
                 key={d.id}

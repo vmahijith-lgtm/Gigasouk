@@ -251,17 +251,17 @@ export default function GigaSoukStagingArea({ designerId }) {
   const msgColor = { success: C.green, error: C.red, info: C.gold };
 
   return (
-    <div style={{ fontFamily: "Inter, sans-serif", color: C.t1 }}>
+    <div style={{ fontFamily: "Inter, sans-serif", color: C.t1, width: "100%", maxWidth: "100%", minWidth: 0 }}>
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700 }}>Staging Area</h2>
           <p style={{ fontSize: 13, color: C.t3, marginTop: 3 }}>
             Manage your designs through the commitment pipeline
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           {variants.length > 0 && (
             <span style={{
               background: C.gold + "22", border: `1px solid ${C.gold}`,
@@ -293,7 +293,10 @@ export default function GigaSoukStagingArea({ designerId }) {
       )}
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
+      <div style={{
+        display: "flex", gap: 0, borderBottom: `1px solid ${C.border}`, marginBottom: 24,
+        overflowX: "auto", WebkitOverflowScrolling: "touch", minWidth: 0,
+      }}>
         {[
           { key: "pipeline", label: "Pipeline" },
           { key: "variants", label: `Variants${variants.length > 0 ? ` (${variants.length})` : ""}` },
@@ -302,7 +305,8 @@ export default function GigaSoukStagingArea({ designerId }) {
             style={{
               padding: "10px 20px", border: "none", background: "none", cursor: "pointer",
               color: tab === t.key ? C.green : C.t3, fontWeight: tab === t.key ? 700 : 400,
-              fontSize: 14, borderBottom: `2px solid ${tab === t.key ? C.green : "transparent"}`
+              fontSize: 14, borderBottom: `2px solid ${tab === t.key ? C.green : "transparent"}`,
+              whiteSpace: "nowrap", flexShrink: 0,
             }}>
             {t.label}
           </button>
@@ -735,8 +739,9 @@ function NewDesignModal({ designerId, onCreated, onClose }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: "min(560px, 100vw)", background: C.card, height: "100%",
-          overflowY: "auto", padding: "28px 28px 48px",
+          width: "min(560px, 100%)", maxWidth: "100%", boxSizing: "border-box",
+          background: C.card, height: "100%",
+          overflowY: "auto", padding: "clamp(16px, 4vw, 28px) clamp(16px, 4vw, 28px) 48px",
           borderLeft: `1px solid ${C.border}`, fontFamily: "Inter, sans-serif",
         }}
       >

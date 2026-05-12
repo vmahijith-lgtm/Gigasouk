@@ -242,15 +242,19 @@ export default function NegotiationList({ role, designerId, manufacturerId, prof
       <style>{`
         .gs-neg-grid {
           display: grid;
-          grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+          grid-template-columns: minmax(0, min(320px, 100%)) minmax(0, 1fr);
           gap: 0;
           border-radius: 14px;
           overflow: hidden;
           border: 1px solid ${C.border};
           min-height: min(72vh, 640px);
           max-height: min(85vh, 900px);
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
         }
-        @media (max-width: 880px) {
+        @media (max-width: 960px) {
           .gs-neg-grid {
             grid-template-columns: 1fr;
             max-height: none;
