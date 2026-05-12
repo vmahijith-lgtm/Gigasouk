@@ -369,7 +369,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
 
       {/* ── PROFILE TAB ──────────────────────────────────────────── */}
       {tab === "profile" && (
-        <div style={{ maxWidth: 480 }}>
+        <div style={{ maxWidth: 480, width: "100%", minWidth: 0 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Your Profile</h3>
           {[
             { label: "Name", val: profile.full_name },
@@ -380,10 +380,14 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
             <div key={f.label} style={{
               background: C.card, border: `1px solid ${C.border}`,
               borderRadius: 8, padding: "12px 16px", marginBottom: 10,
-              display: "flex", justifyContent: "space-between"
+              display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+              flexWrap: "wrap", gap: "8px 12px", width: "100%", minWidth: 0, boxSizing: "border-box",
             }}>
-              <span style={{ fontSize: 12, color: C.t3 }}>{f.label}</span>
-              <span style={{ fontSize: 13, color: C.t1 }}>{f.val}</span>
+              <span style={{ fontSize: 12, color: C.t3, flexShrink: 0 }}>{f.label}</span>
+              <span style={{
+                fontSize: 13, color: C.t1, textAlign: "right", minWidth: 0, flex: "1 1 12rem",
+                overflowWrap: "anywhere", wordBreak: "break-word",
+              }}>{f.val}</span>
             </div>
           ))}
           {/* Wallet balance in profile */}

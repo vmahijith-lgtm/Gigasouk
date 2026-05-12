@@ -346,6 +346,46 @@ export default function GigaSoukStagingArea({ designerId }) {
       {/* ── PIPELINE TAB ──────────────────────────────────────────── */}
       {!loading && tab === "pipeline" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <style>{`
+            .gs-staging-card-row {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 14px 16px;
+              width: 100%;
+              min-width: 0;
+            }
+            .gs-staging-card-main {
+              flex: 1 1 220px;
+              min-width: 0;
+              max-width: 100%;
+            }
+            .gs-staging-card-actions {
+              display: flex;
+              flex-direction: column;
+              align-items: flex-end;
+              gap: 8px;
+              flex: 1 1 160px;
+              min-width: 0;
+              max-width: 100%;
+            }
+            @media (max-width: 560px) {
+              .gs-staging-card-actions {
+                flex-basis: 100%;
+                align-items: stretch;
+              }
+              .gs-staging-card-actions > button,
+              .gs-staging-card-actions > span,
+              .gs-staging-card-actions > p {
+                width: 100%;
+                max-width: 100%;
+                box-sizing: border-box;
+                white-space: normal !important;
+                text-align: center;
+              }
+            }
+          `}</style>
           {designs.length === 0 && (
             <div style={{ textAlign: "center", padding: 60, color: C.t3 }}>
               <p style={{ fontSize: 32, marginBottom: 14 }}>📐</p>
@@ -361,20 +401,21 @@ export default function GigaSoukStagingArea({ designerId }) {
             return (
               <div key={design.id} style={{
                 background: C.card, border: `1px solid ${C.border}`,
-                borderRadius: 10, padding: 20
+                borderRadius: 10, padding: "clamp(14px, 4vw, 20px)", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box",
               }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div className="gs-staging-card-row">
 
                   {/* Left: info */}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <div className="gs-staging-card-main">
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
                       <span style={{
                         background: meta.color + "22", border: `1px solid ${meta.color}`,
-                        borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 700, color: meta.color
+                        borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 700, color: meta.color,
+                        flexShrink: 0,
                       }}>
                         {meta.label}
                       </span>
-                      <h3 style={{ fontSize: 15, fontWeight: 700, color: C.t1 }}>{design.title}</h3>
+                      <h3 style={{ fontSize: 15, fontWeight: 700, color: C.t1, margin: 0, minWidth: 0, flex: "1 1 12rem", lineHeight: 1.35, overflowWrap: "anywhere" }}>{design.title}</h3>
                     </div>
 
                     <p style={{ fontSize: 22, fontWeight: 800, color: C.green, marginBottom: 8 }}>
@@ -400,7 +441,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                     )}
 
                     {/* Commits progress */}
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 12, color: C.t3 }}>Commitments:</span>
                       {activeCommits.length === 0 && <span style={{ fontSize: 12, color: C.t3 }}>None yet</span>}
                       {activeCommits.map((c, i) => (
@@ -483,31 +524,24 @@ export default function GigaSoukStagingArea({ designerId }) {
                   </div>
 
                   {/* Right: actions */}
-                  <div style={{
-                    marginLeft: 20,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: 8,
-                    flexShrink: 0,
-                  }}>
+                  <div className="gs-staging-card-actions">
                     {design.status === "draft" && (
                       <>
                         <button type="button" onClick={() => handleSeek(design.id)}
                           style={{
                             padding: "9px 18px", borderRadius: 8, border: "none",
                             background: C.gold, color: "#060810", fontWeight: 700, fontSize: 13,
-                            cursor: "pointer", whiteSpace: "nowrap"
+                            cursor: "pointer", boxSizing: "border-box",
                           }}>
                           Seek Commitments
                         </button>
-                        <p style={{ fontSize: 10, color: C.t3, maxWidth: 260, textAlign: "right", lineHeight: 1.45, margin: 0 }}>
+                        <p style={{ fontSize: 10, color: C.t3, maxWidth: 280, textAlign: "right", lineHeight: 1.45, margin: 0, overflowWrap: "break-word", alignSelf: "stretch" }}>
                           Workshops see this only after you seek; they need every tag you listed.
                         </p>
                       </>
                     )}
                     {design.status === "seeking" && (
-                      <span style={{ fontSize: 12, color: C.t3, fontStyle: "italic", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 12, color: C.t3, fontStyle: "italic", lineHeight: 1.45, textAlign: "right", overflowWrap: "break-word", maxWidth: "100%" }}>
                         Waiting for manufacturers…
                       </span>
                     )}
@@ -516,14 +550,14 @@ export default function GigaSoukStagingArea({ designerId }) {
                         style={{
                           padding: "9px 18px", borderRadius: 8, border: "none",
                           background: C.green, color: "#060810", fontWeight: 700, fontSize: 13,
-                          cursor: "pointer", whiteSpace: "nowrap"
+                          cursor: "pointer", boxSizing: "border-box",
                         }}>
                         Publish to Shop
                       </button>
                     )}
                     {design.status === "live" && (
                       <>
-                        <span style={{ fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        <span style={{ fontSize: 12, color: C.green, fontWeight: 700, lineHeight: 1.35, textAlign: "right", overflowWrap: "break-word", maxWidth: "100%" }}>
                           Live
                         </span>
                         <button
@@ -538,7 +572,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                             fontWeight: 700,
                             fontSize: 12,
                             cursor: "pointer",
-                            whiteSpace: "nowrap",
+                            boxSizing: "border-box",
                           }}
                         >
                           Unpublish
@@ -546,7 +580,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                       </>
                     )}
                     {design.status === "committed" && !canPublish && (
-                      <span style={{ fontSize: 12, color: C.blue, whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 12, color: C.blue, lineHeight: 1.45, textAlign: "right", overflowWrap: "break-word", maxWidth: "100%" }}>
                         Awaiting approval…
                       </span>
                     )}
@@ -563,7 +597,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                           fontWeight: 700,
                           fontSize: 13,
                           cursor: "pointer",
-                          whiteSpace: "nowrap",
+                          boxSizing: "border-box",
                         }}
                       >
                         Go live
@@ -583,7 +617,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                             fontWeight: 700,
                             fontSize: 12,
                             cursor: "pointer",
-                            whiteSpace: "nowrap",
+                            boxSizing: "border-box",
                           }}
                         >
                           Edit
@@ -600,7 +634,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                             fontWeight: 700,
                             fontSize: 12,
                             cursor: "pointer",
-                            whiteSpace: "nowrap",
+                            boxSizing: "border-box",
                           }}
                         >
                           Delete
@@ -626,10 +660,13 @@ export default function GigaSoukStagingArea({ designerId }) {
           {variants.map(v => (
             <div key={v.id} style={{
               background: C.card, border: `1px solid ${C.gold}55`,
-              borderRadius: 10, padding: 20
+              borderRadius: 10, padding: "clamp(14px, 4vw, 20px)", width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box",
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
+              <div style={{
+                display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start",
+                gap: 14, width: "100%", minWidth: 0,
+              }}>
+                <div style={{ flex: "1 1 200px", minWidth: 0, maxWidth: "100%" }}>
                   <p style={{ fontSize: 12, color: C.t3, marginBottom: 4 }}>REGIONAL PRICE VARIANT</p>
                   <p style={{ fontSize: 15, fontWeight: 700, color: C.t1, marginBottom: 4 }}>
                     {v.region_city}
@@ -653,9 +690,12 @@ export default function GigaSoukStagingArea({ designerId }) {
                       </p>
                     </div>
                   </div>
-                  {v.reason && <p style={{ fontSize: 12, color: C.t3, fontStyle: "italic" }}>"{v.reason}"</p>}
+                  {v.reason && <p style={{ fontSize: 12, color: C.t3, fontStyle: "italic", overflowWrap: "break-word" }}>"{v.reason}"</p>}
                 </div>
-                <div style={{ display: "flex", gap: 8, marginLeft: 20 }}>
+                <div style={{
+                  display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end",
+                  flex: "0 1 auto", minWidth: 0,
+                }}>
                   <button onClick={() => handleVariantReview(v.id, false)}
                     style={{
                       padding: "8px 16px", borderRadius: 8, border: `1px solid ${C.red}`,
