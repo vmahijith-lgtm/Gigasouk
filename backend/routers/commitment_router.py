@@ -25,6 +25,7 @@ from config import (
     DESIGN_STATUS_SEEKING,
     DESIGN_STATUS_COMMITTED,
     DESIGN_STATUS_LIVE,
+    DESIGN_STATUS_PAUSED,
 )
 from services.notify_service import (
     notify_manufacturer_commit_invite,
@@ -93,6 +94,8 @@ class PauseDesignRequest(BaseModel):
     reason:     str = ""
 
 
+class ResumeShopRequest(BaseModel):
+    designer_id: str
 class ShowcaseImagesBody(BaseModel):
     showcase_image_urls: List[str]
 
@@ -682,22 +685,84 @@ async def publish_design(
 # ════════════════════════════════════════════════════════════════
 
 @router.post("/designs/{design_id}/pause")
-def pause_design(design_id: str, req: PauseDesignRequest):
+def pause_design(
+    design_id: str,
+    req: PauseDesignRequest,
+    authorization: Optional[str] = Header(None),
+):
     """
-    Designer or admin pauses a live design.
-    Hides it from the shop without deleting anything.
-    To re-activate: publish endpoint above.
+    Designer pauses a live design — hides it from the shop without deleting.
+    JWT must match designer_id; only `live` → `paused`.
     """
+    if req.design_id != design_id:
+        raise HTTPException(400, "design_id in body must match URL")
+
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile["id"] != req.designer_id:
+        raise HTTPException(403, "You must be signed in as this designer")
+    if profile.get("role") != "designer":
+        raise HTTPException(403, "Only the design owner can pause a listing")
+
     design = get_one("designs", {"id": design_id})
     if not design:
         raise HTTPException(404, "Design not found")
+    if design["designer_id"] != req.designer_id:
+        raise HTTPException(403, "Not your design")
+    if design["status"] != DESIGN_STATUS_LIVE:
+        raise HTTPException(
+            400,
+            f"Only live designs can be paused (unpublished). Current status: {design['status']}",
+        )
 
     safe_update("designs", {"id": design_id}, {
-        "status":    "paused",
+        "status":    DESIGN_STATUS_PAUSED,
         "paused_at": datetime.now(timezone.utc).isoformat(),
-        "pause_reason": req.reason,
+        "pause_reason": req.reason or "",
     })
-    return {"design_id": design_id, "status": "paused"}
+    return {"design_id": design_id, "status": DESIGN_STATUS_PAUSED}
+
+
+# ════════════════════════════════════════════════════════════════
+# ENDPOINT: DESIGNER RESUMES A PAUSED LISTING (back to LIVE)
+# POST /api/v1/designs/{design_id}/resume-shop
+# ════════════════════════════════════════════════════════════════
+
+@router.post("/designs/{design_id}/resume-shop")
+def resume_shop_design(
+    design_id: str,
+    req: ResumeShopRequest,
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Designer sets a paused design back to live so it appears in the shop again.
+    """
+    payload = verify_jwt(authorization)
+    profile = get_one("profiles", {"auth_id": payload.get("sub")})
+    if not profile or profile["id"] != req.designer_id:
+        raise HTTPException(403, "You must be signed in as this designer")
+    if profile.get("role") != "designer":
+        raise HTTPException(403, "Only the design owner can resume a listing")
+
+    design = get_one("designs", {"id": design_id})
+    if not design:
+        raise HTTPException(404, "Design not found")
+    if design["designer_id"] != req.designer_id:
+        raise HTTPException(403, "Not your design")
+    if design["status"] != DESIGN_STATUS_PAUSED:
+        raise HTTPException(
+            400,
+            f"Only paused designs can go live again this way. Current: {design['status']}",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    safe_update("designs", {"id": design_id}, {
+        "status":       DESIGN_STATUS_LIVE,
+        "updated_at":   now,
+        "pause_reason": "",
+    })
+    return {"design_id": design_id, "status": DESIGN_STATUS_LIVE,
+            "message": "Design is live in the shop again."}
 
 
 # ════════════════════════════════════════════════════════════════

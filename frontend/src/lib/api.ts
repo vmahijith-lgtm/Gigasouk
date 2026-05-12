@@ -113,8 +113,16 @@ export const getMyCommitments = () => api.get("/api/v1/commitments/mine");
 /** Designer-only: backend requires role=designer + JWT. Manufacturers cannot publish. */
 export const publishDesign        = (designId: string, designerId: string) =>
   api.post(`/api/v1/designs/${designId}/publish`, { designer_id: designerId });
-export const pauseDesign          = (designId: string, data: object) =>
-  api.post(`/api/v1/designs/${designId}/pause`, data);
+/** Body must include design_id + designer_id for server checks. */
+export const pauseDesign = (designId: string, designerId: string, reason = "") =>
+  api.post(`/api/v1/designs/${designId}/pause`, {
+    design_id: designId,
+    designer_id: designerId,
+    reason,
+  });
+/** Paused listing back to live (not the same as first-time publish from committed). */
+export const resumeShopDesign = (designId: string, designerId: string) =>
+  api.post(`/api/v1/designs/${designId}/resume-shop`, { designer_id: designerId });
 export const adminPendingVariants = ()                  => api.get("/api/v1/admin/variants/pending");
 
 // ── Designs (Designer CRUD) ───────────────────────────────────────
