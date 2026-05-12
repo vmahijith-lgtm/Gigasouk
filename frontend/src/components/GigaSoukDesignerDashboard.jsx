@@ -129,7 +129,7 @@ export default function GigaSoukDesignerDashboard({ designerId, onSignOut }) {
     {
       key: "upload",
       label: "Upload",
-      desc: "QC uploads are handled by manufacturers",
+      desc: "Quality checks are handled by manufacturers",
       cta: "Manufacturer only",
       enabled: false,
       onClick: () => { },

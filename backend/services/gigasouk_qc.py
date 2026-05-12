@@ -18,6 +18,15 @@
 #
 # TO ADJUST TOLERANCE:
 #   Change QC_TOLERANCE_MM in config.py. One line. Done.
+#
+# DEEP-LEARNING ANOMALY QC (optional):
+#   OpenVINO Anomalib (https://github.com/open-edge-platform/anomalib) is a
+#   Python library for image anomaly detection (PatchCore, PaDiM, etc.).
+#   It does not run in the browser. To use it here: train or load a model per
+#   design or product family, add anomalib + torch (or OpenVINO export) to
+#   backend dependencies, then extend run_qc_check() below to score each
+#   photo_url and merge with (or replace) the geometric CAD comparison.
+#   Expect larger Docker images and GPU or CPU inference time on Railway.
 # ════════════════════════════════════════════════════════════════
 
 import asyncio

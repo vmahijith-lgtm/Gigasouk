@@ -96,7 +96,7 @@ const TABS = [
   { key: "board", label: "Commitment Board" },
   { key: "jobs", label: "Active Jobs" },
   { key: "chat", label: "Chat" },
-  { key: "qc", label: "QC Upload" },
+  { key: "qc", label: "Quality Check" },
   { key: "map", label: "🗺️ Map View" },
   { key: "earnings", label: "Earnings" },
 ];
@@ -450,7 +450,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
           .createSignedUrl(path, 7200);
         const signedUrl = signed?.signedUrl || signed?.signedURL;
         if (signErr || !signedUrl) {
-          setQcMsg({ text: signErr?.message || "Could not sign image URL for QC.", type: "error" });
+          setQcMsg({ text: signErr?.message || "Could not sign image URL for quality check.", type: "error" });
           break;
         }
         added.push(signedUrl);
@@ -480,15 +480,15 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         photo_urls: photos,
       });
       if (data.passed) {
-        setQcMsg({ text: "QC passed! Shipping is being arranged automatically.", type: "success" });
+        setQcMsg({ text: "Quality check passed! Shipping is being arranged automatically.", type: "success" });
       } else {
-        setQcMsg({ text: `QC failed: ${data.reason || data.message || "Try again"}. Re-make the part and resubmit.`, type: "error" });
+        setQcMsg({ text: `Quality check failed: ${data.reason || data.message || "Try again"}. Re-make the part and resubmit.`, type: "error" });
       }
       setQcOrder(null);
       setPhotos([]);
       setJobsRefreshKey(k => k + 1);
     } catch (e) {
-      setQcMsg({ text: e?.response?.data?.detail || "QC submission failed.", type: "error" });
+      setQcMsg({ text: e?.response?.data?.detail || "Quality check submission failed.", type: "error" });
     } finally {
       setUploading(false);
     }
@@ -548,8 +548,8 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
     {
       key: "upload",
       label: "Upload",
-      desc: "Upload QC photos for cutting orders",
-      cta: "Upload QC",
+      desc: "Upload photos for quality check on cutting orders",
+      cta: "Quality check",
       onClick: () => setTab("qc"),
     },
     {
@@ -795,7 +795,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                 { label: "City", val: mfr.city },
                 { label: "State", val: mfr.state },
                 { label: "Rating", val: `${mfr.rating || 0} / 5.0` },
-                { label: "QC Pass Rate", val: `${mfr.qc_pass_rate || 0}%` },
+                { label: "Quality pass rate", val: `${mfr.qc_pass_rate || 0}%` },
                 { label: "Total Jobs", val: mfr.total_jobs || 0 },
                 { label: "Premium", val: mfr.is_premium ? "Yes ✓" : "No" },
               ].map(f => (
@@ -822,7 +822,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         }}>
           {[
             { label: "Active Jobs", val: workQueue.length, color: C.blue },
-            { label: "QC Ready", val: qcReadyJobs.length, color: C.gold },
+            { label: "Checks due", val: qcReadyJobs.length, color: C.gold },
             { label: "Rating", val: `${mfr.rating || "—"} ★`, color: C.green },
             { label: "Total Earned", val: `₹${totalEarnings.toLocaleString("en-IN")}`, color: C.purple },
           ].map(s => (
@@ -1200,7 +1200,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                         background: job.status === "qc_failed" ? C.red + "33" : C.gold,
                         color: "#060810", fontWeight: 700, fontSize: 12, cursor: "pointer"
                       }}>
-                      {job.status === "qc_failed" ? "Resubmit QC" : "Submit QC Photos"}
+                      {job.status === "qc_failed" ? "Resubmit check" : "Submit check photos"}
                     </button>
                   )}
                   {job.shiprocket_awb && (
@@ -1242,24 +1242,25 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
         </div>
       )}
 
-      {/* ── QC UPLOAD TAB ────────────────────────────────────────── */}
+      {/* ── Quality check tab (internal key: qc) ─────────────────── */}
       {tab === "qc" && (
         <div style={{ maxWidth: 560 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>QC photo upload</h3>
-          <p style={{ fontSize: 13, color: C.t3, marginBottom: 8, lineHeight: 1.5 }}>
-            Upload <strong style={{ color: C.t2 }}>five</strong> clear photos of the finished part (top, front, side, detail, scale/context).
-            Files are stored under your account in <code style={{ fontSize: 11, color: C.gold }}>qc-photos</code>; the AI receives time-limited links.
-          </p>
-          <p style={{ fontSize: 12, color: C.t3, marginBottom: 20 }}>
-            AI compares against the design CAD reference (±0.5&nbsp;mm tolerance by default). Use good lighting and keep the part in frame.
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>Quality check</h3>
+          <p style={{ fontSize: 13, color: C.t3, marginBottom: 18, lineHeight: 1.55, maxWidth: 480 }}>
+            Upload five clear photos of the finished part, then run the check. We compare your photos to the
+            design reference—good lighting and a steady shot help get a reliable result.
           </p>
 
           {/* Select order */}
           {!qcOrder && (
             <>
-              <p style={{ fontSize: 12, color: C.t3, marginBottom: 10 }}>Orders in manufacturing or waiting for QC retry:</p>
+              {qcReadyJobs.length > 0 && (
+                <p style={{ fontSize: 12, fontWeight: 600, color: C.t2, marginBottom: 10 }}>Choose an order</p>
+              )}
               {qcReadyJobs.length === 0 && (
-                <p style={{ color: C.t3, padding: 20 }}>No orders need QC right now (requires status &quot;cutting&quot; or &quot;qc_failed&quot;).</p>
+                <p style={{ color: C.t3, padding: "12px 0", fontSize: 13, lineHeight: 1.5 }}>
+                  No orders need a quality check right now. When a job is ready, it will appear here.
+                </p>
               )}
               {qcReadyJobs.map(j => (
                 <div key={j.id} onClick={() => { setQcOrder(j); setPhotos([]); setQcMsg({ text: "", type: "" }); }}
@@ -1276,7 +1277,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                       color: j.status === "qc_failed" ? C.red : C.purple,
                       background: (j.status === "qc_failed" ? C.red : C.purple) + "22",
                       padding: "2px 8px", borderRadius: 20,
-                    }}>{j.status === "qc_failed" ? "Retry QC" : "Cutting"}</span>
+                    }}>{j.status === "qc_failed" ? "Retry check" : "Cutting"}</span>
                   </div>
                   <p style={{ fontSize: 12, color: C.t3, marginTop: 6 }}>{j.designs?.title}</p>
                 </div>
@@ -1292,11 +1293,11 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                 borderRadius: 10,
                 padding: "14px 18px", marginBottom: 16
               }}>
-                <p style={{ fontSize: 12, color: C.t3 }}>QC for</p>
+                <p style={{ fontSize: 12, color: C.t3 }}>Quality check for</p>
                 <p style={{ fontWeight: 700, color: C.t1, marginBottom: 6 }}>{qcOrder.order_ref} — {qcOrder.designs?.title}</p>
                 {Array.isArray(qcOrder.qc_records) && qcOrder.qc_records.length > 0 && (
                   <p style={{ fontSize: 11, color: C.t3, margin: 0 }}>
-                    Previous QC attempt{qcOrder.qc_records.length > 1 ? "s" : ""}: {qcOrder.qc_records.length}
+                    Previous quality check attempt{qcOrder.qc_records.length > 1 ? "s" : ""}: {qcOrder.qc_records.length}
                   </p>
                 )}
               </div>
@@ -1332,7 +1333,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                     }}>
                       {url ? (
                         <>
-                          <img src={url} alt={`QC ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <img src={url} alt={`Quality check photo ${idx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           <button
                             type="button"
                             onClick={() => removeQCPhoto(idx)}
@@ -1382,7 +1383,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                     background: photos.length >= 5 ? C.green : C.t3, color: "#060810",
                     fontWeight: 700, fontSize: 14, cursor: photos.length >= 5 && !uploading ? "pointer" : "not-allowed"
                   }}>
-                  Submit for AI QC
+                  Run AI quality check
                 </button>
               </div>
 
