@@ -58,16 +58,16 @@ function apiErrorDetail(e) {
   return String(d);
 }
 
-/** Workshop panel banner: green for capability save ("Saved…") and showcase upload ("Workshop photos saved…"). */
+/** Workshop panel banner: green for capability save and showcase upload success. */
 function profileFlashIsSuccess(msg) {
   if (!msg || typeof msg !== "string") return false;
   const t = msg.trim();
-  return t.startsWith("Saved") || t.startsWith("Workshop photos saved");
+  return t.startsWith("Saved") || t.startsWith("Photos saved");
 }
 
 /** Only after saving machine/material tags — not after showcase uploads. */
 function profileFlashShowBoardShortcut(msg) {
-  return typeof msg === "string" && msg.includes("Commitment Board list updates");
+  return typeof msg === "string" && msg.includes("Board refreshes");
 }
 
 /** Signed view URLs for product-images paths (workshop folder). */
@@ -303,12 +303,11 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
       }
 
       setJobsRefreshKey((k) => k + 1);
-      setProfileFlash("Workshop photos saved. Previews update below.");
+      setProfileFlash("Photos saved.");
     } catch (e) {
       const msg = apiErrorDetail(e);
       setProfileFlash(
-        msg ||
-          "Upload failed. Check Storage bucket product-images exists, RLS allows your uid prefix, and API /commitments/…/showcase is reachable.",
+        msg || "Upload failed. Check connection and try again.",
       );
     } finally {
       setShowcaseBusy(null);
@@ -326,7 +325,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
       if (error) throw error;
       setMfr(prev => ({ ...prev, machine_types: machinesDraft, materials: materialsDraft }));
       setBoardRefreshKey(k => k + 1);
-      setProfileFlash("Saved. Your Commitment Board list updates to match these tags — open the board to see new jobs.");
+      setProfileFlash("Saved. Board refreshes with jobs that match your tags.");
     } catch (e) {
       const msg = typeof e === "object" && e && "message" in e ? String(e.message) : "";
       setProfileFlash(msg || "Could not save. Try again.");
@@ -655,7 +654,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
             <div>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: C.t1, margin: 0 }}>Workshop Profile</h2>
               <p style={{ fontSize: 12, color: C.t3, margin: "6px 0 0", maxWidth: 560 }}>
-                Configure capabilities and location used for routing.
+                Tags and location used for matching jobs.
               </p>
             </div>
             <button type="button" onClick={() => setWorkshopOpen(false)}
@@ -673,10 +672,9 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
               padding: "20px 22px",
               minWidth: 0,
             }}>
-              <p style={{ fontSize: 12, color: C.t3, lineHeight: 1.5, marginBottom: 14 }}>
-                Each design lists required <strong style={{ color: C.blue }}>machine</strong> and{" "}
-                <strong style={{ color: C.green }}>material</strong> tags. You only see a job when your workshop includes{" "}
-                <em>every</em> tag on that design.
+              <p style={{ fontSize: 12, color: C.t3, lineHeight: 1.45, marginBottom: 14 }}>
+                You only see designs whose required <strong style={{ color: C.blue }}>machines</strong> and{" "}
+                <strong style={{ color: C.green }}>materials</strong> are all selected below.
               </p>
 
               {profileFlash && (
@@ -763,7 +761,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
             {/* Right column — location & summary */}
             <div style={{ padding: "20px 22px", minWidth: 0, background: C.bg }}>
               <p style={{ fontSize: 12, color: C.t3, marginBottom: 12, lineHeight: 1.45 }}>
-                <strong style={{ color: C.t2 }}>Location</strong> — routing & map. City-level is fine; exact pins stay private until an order exists.
+                <strong style={{ color: C.t2 }}>Location</strong> — city-level routing; exact address stays private until there is an order.
               </p>
               <div style={{ marginBottom: 20 }}>
                 <LocationPicker
@@ -931,20 +929,19 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
               Go to chats
             </button>
           </div>
-          <p style={{ fontSize: 13, color: C.t3, marginBottom: 18, lineHeight: 1.5, maxWidth: 640 }}>
-            Customer orders you are fulfilling, plus <strong style={{ color: C.t2 }}>design commitments</strong> that do
-            not yet have a buyer order (you will see the full order workflow here once a customer checks out).
+          <p style={{ fontSize: 13, color: C.t3, marginBottom: 18, lineHeight: 1.45, maxWidth: 560 }}>
+            Open customer orders and active design commitments. Buyer orders show the full workflow here.
           </p>
           {workQueue.length === 0 && (
             <div style={{ textAlign: "center", padding: 60, color: C.t3 }}>
-              <p>No orders or commitments yet.</p>
+              <p>Nothing here yet.</p>
               <p style={{ fontSize: 12, marginTop: 6 }}>
-                Commit to designs on the Commitment Board — they will appear here. After your{" "}
+                Commit on the board (with matching{" "}
                 <button type="button" onClick={() => setWorkshopOpen(true)}
                   style={{ background: "none", border: "none", color: C.green, cursor: "pointer", fontWeight: 700, padding: 0 }}>
-                  Workshop Profile
-                </button>{" "}
-                matches required tags, use the board to opt in.
+                  workshop tags
+                </button>
+                ).
               </p>
             </div>
           )}
@@ -1022,15 +1019,14 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                         Committed {new Date(c.committed_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                       </p>
                       <p style={{ fontSize: 12, color: C.t3, marginTop: 10, lineHeight: 1.45 }}>
-                        When a customer orders this design routed to you, the full job (CAD, manufacturing steps) appears
-                        as a <strong style={{ color: C.t2 }}>customer order</strong> above or replaces this card.
+                        After a customer orders this design through you, it shows as a full order above.
                       </p>
                       <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
                         <p style={{ fontSize: 12, fontWeight: 700, color: C.t2, marginBottom: 6 }}>
-                          Workshop / product photos
+                          Workshop photos
                         </p>
                         <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.45 }}>
-                          Add photos of your facility or sample parts. Secure folder path: <code style={{ fontSize: 11, color: C.gold }}>product-images/{"{your-auth-id}"}/showcase/{c.id}/...</code>. Same full-quality signed viewing as the designer gallery.
+                          Facility or sample shots — shoppers see them like the designer gallery (signed links).
                         </p>
                         <input
                           type="file"
@@ -1062,7 +1058,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
                         </button>
                         {(c.showcase_image_urls || []).length > 0 && (
                           <p style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
-                            {(c.showcase_image_urls || []).length} workshop photo(s) saved
+                            {(c.showcase_image_urls || []).length} saved
                           </p>
                         )}
                         {showcaseThumbs[c.id]?.length > 0 && (
@@ -1402,8 +1398,8 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
       {/* ── MAP VIEW TAB ──────────────────────────────────────────── */}
           {tab === "map" && (
         <div>
-          <p style={{ color: C.t3, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
-            Your factory (red pin) and each delivery address. Pin colours reflect order status. Zoom and pan the map for detail.
+          <p style={{ color: C.t3, fontSize: 13, marginBottom: 16, lineHeight: 1.45 }}>
+            You (red) and deliveries (colour = order status).
           </p>
           {mfr?.lat && mfr?.lng ? (
             <ManufacturerOrderMap
@@ -1423,7 +1419,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
             }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📍</div>
               <p style={{ color: C.t2, fontSize: 14 }}>
-                Add your factory's coordinates in the Workshop Profile tab to enable the map view.
+                Set location in Workshop Profile to see the map.
               </p>
             </div>
           )}
@@ -1442,7 +1438,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
               ₹{totalEarnings.toLocaleString("en-IN")}
             </p>
             <p style={{ fontSize: 11, color: C.t3, marginTop: 10, lineHeight: 1.45 }}>
-              Customer payments run through Razorpay (escrow). You receive net amounts here after delivery triggers release. Shiprocket keys stay on the server only.
+              Totals after customer payment clears escrow. Payouts follow your releases.
             </p>
           </div>
           <div style={{
@@ -1472,7 +1468,7 @@ export default function GigaSoukManufacturerDashboard({ manufacturerId, profileI
           </div>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: C.t2, marginBottom: 12 }}>Orders · payment status</h3>
           <p style={{ fontSize: 12, color: C.t3, marginBottom: 10 }}>
-            in_escrow = customer paid, funds held. pending = not paid yet. released = payout recorded below.
+            Paid & held · not paid · paid out
           </p>
           {earningsOrders.length === 0 && <p style={{ color: C.t3, fontSize: 13, marginBottom: 16 }}>No orders yet.</p>}
           {earningsOrders.slice(0, 20).map(j => (

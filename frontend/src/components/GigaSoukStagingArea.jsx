@@ -406,10 +406,10 @@ export default function GigaSoukStagingArea({ designerId }) {
                       paddingTop: 12,
                     }}>
                       <p style={{ fontSize: 12, fontWeight: 700, color: C.t2, marginBottom: 6 }}>
-                        Product & reference photos
+                        Product photos
                       </p>
                       <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.45 }}>
-                        Upload high-resolution JPEG, PNG, or WebP. Secure folder path: <code style={{ fontSize: 11, color: C.gold }}>product-images/{"{your-auth-id}"}/designs/{design.id}/...</code>. Buyers and makers view only signed full-quality links.
+                        JPEG, PNG, or WebP. Shoppers see signed full-size previews below.
                       </p>
                       <input
                         type="file"
@@ -441,7 +441,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                       </button>
                       {(design.gallery_image_urls || []).length > 0 && (
                         <p style={{ fontSize: 11, color: C.t3, marginTop: 8 }}>
-                          {(design.gallery_image_urls || []).length} image(s) saved
+                          {(design.gallery_image_urls || []).length} saved
                         </p>
                       )}
                       <div style={{ marginTop: 12 }}>
@@ -463,7 +463,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                           Seek Commitments
                         </button>
                         <p style={{ fontSize: 10, color: C.t3, maxWidth: 260, textAlign: "right", lineHeight: 1.45, margin: 0 }}>
-                          Manufacturers only see this on their Commitment Board after you seek. Their workshop must list every machine & material tag above.
+                          Workshops see this only after you seek; they need every tag you listed.
                         </p>
                       </div>
                     )}
@@ -933,10 +933,8 @@ function NewDesignModal({ designerId, onCreated, onClose }) {
             background: C.card2, border: `1px solid ${C.border}`,
             borderRadius: 8, padding: "12px 16px", marginBottom: 24
           }}>
-            <p style={{ fontSize: 12, color: C.t3, lineHeight: 1.6 }}>
-              The design starts as a <strong style={{ color: C.t2 }}>Draft</strong> — invisible to customers.
-              After creation, click <strong style={{ color: C.gold }}>Seek Commitments</strong> to alert
-              manufacturers. Once at least one factory commits, you can <strong style={{ color: C.green }}>Publish to Shop</strong>.
+            <p style={{ fontSize: 12, color: C.t3, lineHeight: 1.5 }}>
+              Draft → <strong style={{ color: C.gold }}>Seek</strong> → commitments → <strong style={{ color: C.green }}>Publish</strong>.
             </p>
           </div>
 
