@@ -27,6 +27,9 @@ import {
   getDesignerDesigns,
   updateDesignGallery,
   deleteDesign,
+  updateDesign,
+  pauseDesign,
+  resumeShopDesign,
 } from "../lib/api";
 import { MACHINE_OPTIONS, MATERIAL_OPTIONS } from "../lib/workshop-tags";
 import DesignMediaGallery from "./DesignMediaGallery";
@@ -59,6 +62,7 @@ export default function GigaSoukStagingArea({ designerId }) {
   const [msg,       setMsg]       = useState({ text: "", type: "" });
   const [galleryBusy, setGalleryBusy] = useState(null);
   const [showForm,  setShowForm]  = useState(false);
+  const [editDesign, setEditDesign] = useState(null);
   const designsRef = useRef([]);
   useEffect(() => {
     designsRef.current = designs;
@@ -195,6 +199,30 @@ export default function GigaSoukStagingArea({ designerId }) {
       flash("Design deleted.");
     } catch (e) {
       flash(e?.response?.data?.detail || "Could not delete design.", "error");
+    }
+  }
+
+  async function handlePauseListing(design) {
+    const ok = window.confirm(
+      `Unpublish "${design.title}"?\n\nIt will leave the shop until you go live again. You can then edit details.`,
+    );
+    if (!ok) return;
+    try {
+      await pauseDesign(design.id, designerId, "");
+      await loadPipeline();
+      flash("Listing paused.");
+    } catch (e) {
+      flash(e?.response?.data?.detail || "Could not unpublish.", "error");
+    }
+  }
+
+  async function handleResumeListing(design) {
+    try {
+      await resumeShopDesign(design.id, designerId);
+      await loadPipeline();
+      flash("Design is live again.");
+    } catch (e) {
+      flash(e?.response?.data?.detail || "Could not go live.", "error");
     }
   }
 
@@ -450,11 +478,18 @@ export default function GigaSoukStagingArea({ designerId }) {
                     </div>
                   </div>
 
-                  {/* Right: action */}
-                  <div style={{ marginLeft: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {/* Right: actions */}
+                  <div style={{
+                    marginLeft: 20,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: 8,
+                    flexShrink: 0,
+                  }}>
                     {design.status === "draft" && (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                        <button onClick={() => handleSeek(design.id)}
+                      <>
+                        <button type="button" onClick={() => handleSeek(design.id)}
                           style={{
                             padding: "9px 18px", borderRadius: 8, border: "none",
                             background: C.gold, color: "#060810", fontWeight: 700, fontSize: 13,
@@ -465,7 +500,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                         <p style={{ fontSize: 10, color: C.t3, maxWidth: 260, textAlign: "right", lineHeight: 1.45, margin: 0 }}>
                           Workshops see this only after you seek; they need every tag you listed.
                         </p>
-                      </div>
+                      </>
                     )}
                     {design.status === "seeking" && (
                       <span style={{ fontSize: 12, color: C.t3, fontStyle: "italic", whiteSpace: "nowrap" }}>
@@ -473,7 +508,7 @@ export default function GigaSoukStagingArea({ designerId }) {
                       </span>
                     )}
                     {canPublish && (
-                      <button onClick={() => handlePublish(design.id)}
+                      <button type="button" onClick={() => handlePublish(design.id)}
                         style={{
                           padding: "9px 18px", borderRadius: 8, border: "none",
                           background: C.green, color: "#060810", fontWeight: 700, fontSize: 13,
@@ -483,33 +518,90 @@ export default function GigaSoukStagingArea({ designerId }) {
                       </button>
                     )}
                     {design.status === "live" && (
-                      <span style={{ fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>
-                        🟢 Live
-                      </span>
+                      <>
+                        <span style={{ fontSize: 12, color: C.green, fontWeight: 700, whiteSpace: "nowrap" }}>
+                          Live
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handlePauseListing(design)}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: 8,
+                            border: `1px solid ${C.gold}88`,
+                            background: C.gold + "18",
+                            color: C.gold,
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Unpublish
+                        </button>
+                      </>
                     )}
                     {design.status === "committed" && !canPublish && (
                       <span style={{ fontSize: 12, color: C.blue, whiteSpace: "nowrap" }}>
                         Awaiting approval…
                       </span>
                     )}
-                    {(design.status === "draft" || design.status === "paused") && (
+                    {design.status === "paused" && (
                       <button
                         type="button"
-                        onClick={() => handleDeleteDesign(design)}
+                        onClick={() => handleResumeListing(design)}
                         style={{
-                          padding: "8px 14px",
+                          padding: "9px 18px",
                           borderRadius: 8,
-                          border: `1px solid ${C.red}66`,
-                          background: C.red + "18",
-                          color: C.red,
+                          border: "none",
+                          background: C.green,
+                          color: "#060810",
                           fontWeight: 700,
-                          fontSize: 12,
+                          fontSize: 13,
                           cursor: "pointer",
                           whiteSpace: "nowrap",
                         }}
                       >
-                        Delete
+                        Go live
                       </button>
+                    )}
+                    {(design.status === "draft" || design.status === "paused") && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setEditDesign(design)}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: 8,
+                            border: `1px solid ${C.border}`,
+                            background: C.card2,
+                            color: C.t2,
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDesign(design)}
+                          style={{
+                            padding: "8px 14px",
+                            borderRadius: 8,
+                            border: `1px solid ${C.red}66`,
+                            background: C.red + "18",
+                            color: C.red,
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -587,6 +679,18 @@ export default function GigaSoukStagingArea({ designerId }) {
           designerId={designerId}
           onCreated={() => handleDesignCreated()}
           onClose={() => setShowForm(false)}
+        />
+      )}
+      {editDesign && (
+        <EditDesignModal
+          design={editDesign}
+          designerId={designerId}
+          onClose={() => setEditDesign(null)}
+          onSaved={async () => {
+            setEditDesign(null);
+            await loadPipeline();
+            flash("Design updated.");
+          }}
         />
       )}
     </div>
@@ -983,3 +1087,257 @@ const inputStyle = {
   padding: "10px 14px", color: "#F4F6FC", fontSize: 14, width: "100%",
   outline: "none", boxSizing: "border-box",
 };
+
+// ════════════════════════════════════════════════════════════════
+// EDIT DESIGN MODAL — PATCH /api/v1/designs/{id} (draft / paused)
+// ════════════════════════════════════════════════════════════════
+
+function EditDesignModal({ design, designerId, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    category: "",
+    base_price: "",
+    royalty_percent: "15",
+  });
+  const [machines, setMachines] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setForm({
+      title: design.title || "",
+      description: design.description || "",
+      category: design.category || "",
+      base_price: design.base_price != null && design.base_price !== "" ? String(design.base_price) : "",
+      royalty_percent: design.royalty_percent != null ? String(design.royalty_percent) : "15",
+    });
+    setMachines(Array.isArray(design.required_machines) ? [...design.required_machines] : []);
+    setMaterials(Array.isArray(design.required_materials) ? [...design.required_materials] : []);
+    setError("");
+  }, [design.id]);
+
+  function setField(field) {
+    return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  }
+
+  function toggleMachine(m) {
+    setMachines((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+  }
+  function toggleMaterial(m) {
+    setMaterials((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    if (!form.title.trim()) return setError("Title is required.");
+    if (!form.base_price || Number(form.base_price) <= 0) return setError("Enter a valid base price.");
+    if (machines.length === 0) return setError("Select at least one machine type.");
+    if (materials.length === 0) return setError("Select at least one material.");
+    setSubmitting(true);
+    try {
+      await updateDesign(design.id, {
+        designer_id: designerId,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        category: form.category.trim(),
+        base_price: parseFloat(form.base_price),
+        royalty_percent: parseFloat(form.royalty_percent) || 15,
+        required_machines: machines,
+        required_materials: materials,
+      });
+      await onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || "Update failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "#00000090",
+        zIndex: 200,
+        display: "flex",
+        justifyContent: "flex-end",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(560px, 100vw)",
+          background: C.card,
+          height: "100%",
+          overflowY: "auto",
+          padding: "28px 28px 48px",
+          borderLeft: `1px solid ${C.border}`,
+          fontFamily: "Inter, sans-serif",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: C.t1 }}>Edit design</h2>
+            <p style={{ fontSize: 12, color: C.t3, marginTop: 2 }}>Title, price, tags — CAD unchanged here</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: C.t3, fontSize: 22, cursor: "pointer", lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+
+        {error && (
+          <div
+            style={{
+              background: C.red + "18",
+              border: `1px solid ${C.red}`,
+              borderRadius: 8,
+              padding: "12px 16px",
+              marginBottom: 20,
+              fontSize: 13,
+              color: C.red,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <Field label="Design title *">
+            <input value={form.title} onChange={setField("title")} style={inputStyle} />
+          </Field>
+          <Field label="Description">
+            <textarea
+              value={form.description}
+              onChange={setField("description")}
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical" }}
+            />
+          </Field>
+          <Field label="Category">
+            <input value={form.category} onChange={setField("category")} style={inputStyle} />
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
+            <Field label="Base price (₹) *" noMargin>
+              <input
+                type="number"
+                value={form.base_price}
+                onChange={setField("base_price")}
+                min="1"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Royalty %" noMargin>
+              <input
+                type="number"
+                value={form.royalty_percent}
+                onChange={setField("royalty_percent")}
+                min="0"
+                max="50"
+                style={inputStyle}
+              />
+            </Field>
+          </div>
+
+          <Field label="Required machine types *">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {MACHINE_OPTIONS.map((m) => {
+                const on = machines.includes(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => toggleMachine(m)}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      cursor: "pointer",
+                      border: `1px solid ${on ? C.blue : C.border}`,
+                      background: on ? C.blue + "22" : C.card2,
+                      color: on ? C.blue : C.t3,
+                      fontWeight: on ? 700 : 400,
+                    }}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
+          <Field label="Required materials *">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {MATERIAL_OPTIONS.map((m) => {
+                const on = materials.includes(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => toggleMaterial(m)}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      cursor: "pointer",
+                      border: `1px solid ${on ? C.green : C.border}`,
+                      background: on ? C.green + "22" : C.card2,
+                      color: on ? C.green : C.t3,
+                      fontWeight: on ? 700 : 400,
+                    }}
+                  >
+                    {m}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              width: "100%",
+              padding: "13px 0",
+              borderRadius: 8,
+              border: "none",
+              background: submitting ? C.t3 : C.green,
+              color: "#060810",
+              fontWeight: 700,
+              fontSize: 15,
+              cursor: submitting ? "not-allowed" : "pointer",
+              marginTop: 8,
+            }}
+          >
+            {submitting ? "Saving…" : "Save changes"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: "100%",
+              padding: "10px 0",
+              borderRadius: 8,
+              border: "none",
+              background: "none",
+              color: C.t3,
+              fontSize: 13,
+              cursor: "pointer",
+              marginTop: 10,
+            }}
+          >
+            Cancel
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

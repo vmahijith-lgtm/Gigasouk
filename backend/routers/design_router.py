@@ -292,9 +292,10 @@ def update_design(
     if design["designer_id"] != req.designer_id:
         raise HTTPException(403, "Not your design")
     if design["status"] not in (DESIGN_STATUS_DRAFT, DESIGN_STATUS_PAUSED):
-        raise HTTPException(400,
-            f"Design cannot be edited in '{design['status']}' status. "
-            "Pause it first, then edit."
+        raise HTTPException(
+            400,
+            "Edits are only allowed when the design is draft or paused. "
+            f"Current status: {design['status']}. Unpublish from the shop first if it is live.",
         )
 
     updates: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
